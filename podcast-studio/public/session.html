@@ -905,7 +905,9 @@
     function initSocket() {
       socket = io();
 
-      socket.emit('host:join', { sessionId, name: myName });
+      socket.on('connect', () => {
+        socket.emit('host:join', { sessionId, name: myName });
+      });
 
       socket.on('session:joined', ({ participants }) => {
         updateParticipantsList(participants);
