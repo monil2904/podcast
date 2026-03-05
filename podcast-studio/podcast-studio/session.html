@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Studio — PodcastStudio</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#060810;--bg2:#0d1117;--surface:#111827;--border:#1f2937;
+  --accent:#f97316;--green:#22c55e;--red:#ef4444;--blue:#3b82f6;
+  --text:#f1f5f9;--muted:#64748b;--card:#0f1623;
+}
+body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;height:100vh;overflow:hidden;display:flex;flex-direction:column}
+
+/* TOP BAR */
+.topbar{
+  height:52px;background:var(--surface);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;
+  flex-shrink:0;
+}
+.logo{font-size:1rem;font-weight:800;display:flex;align-items:center;gap:.5rem}
+.logo-dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.session-info{display:flex;align-items:center;gap:1rem;font-size:.8rem;font-family:'DM Mono',monospace}
+.session-id{
+  padding:.25rem .75rem;border:1px solid var(--border);border-radius:4px;
+  color:var(--accent);cursor:pointer;transition:all .2s;letter-spacing:.1em;
+}
+.session-id:hover{border-color:var(--accent);background:rgba(249,115,22,.1)}
+.rec-badge{
+  display:flex;align-items:center;gap:.4rem;padding:.25rem .75rem;
+  border-radius:4px;font-weight:700;font-size:.75rem;letter-spacing:.05em;
+  transition:all .3s;
+}
+.rec-badge.idle{background:rgba(100,116,139,.15);color:var(--muted);border:1px solid var(--border)}
+.rec-badge.recording{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3)}
+.rec-dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+.rec-badge.recording .rec-dot{animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.timer{font-family:'DM Mono',monospace;font-size:.9rem;color:var(--red);font-weight:500;min-width:60px;text-align:center}
+.topbar-right{display:flex;align-items:center;gap:.75rem}
+
+/* WORKSPACE */
+.workspace{flex:1;display:flex;overflow:hidden}
+
+/* CANVAS AREA */
+.canvas-area{
+  flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;padding:1.5rem;background:var(--bg);position:relative;
+}
+#stage{
+  border-radius:12px;overflow:hidden;background:#000;
+  max-width:100%;max-height:100%;aspect-ratio:16/9;width:100%;
+  border:1px solid var(--border);box-shadow:0 20px 60px rgba(0,0,0,.5);
+}
+.stage-grid{
+  display:grid;width:100%;height:100%;gap:2px;background:#111;
+}
+.stage-grid.layout-1{grid-template-columns:1fr}
+.stage-grid.layout-2{grid-template-columns:1fr 1fr}
+.stage-grid.layout-3{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+.stage-grid.layout-3 .video-tile:first-child{grid-column:span 2}
+.stage-grid.layout-4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+
+.video-tile{
+  position:relative;overflow:hidden;background:var(--card);
+  display:flex;align-items:center;justify-content:center;
+}
+.video-tile video{width:100%;height:100%;object-fit:cover;display:block}
+.tile-label{
+  position:absolute;bottom:.5rem;left:.5rem;
+  background:rgba(0,0,0,.75);border-radius:4px;
+  padding:.2rem .6rem;font-size:.7rem;font-weight:700;
+  display:flex;align-items:center;gap:.3rem;backdrop-filter:blur(4px);
+}
+.tile-avatar{
+  width:64px;height:64px;border-radius:50%;
+  border:2px solid var(--accent);display:flex;align-items:center;
+  justify-content:center;font-size:1.5rem;font-weight:800;background:var(--surface);
+}
+.tile-muted{position:absolute;top:.5rem;right:.5rem;background:rgba(239,68,68,.2);border:1px solid var(--red);border-radius:4px;padding:.15rem .4rem;font-size:.65rem;color:var(--red)}
+
+/* SIDEBAR */
+.sidebar{
+  width:280px;background:var(--surface);border-left:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;
+}
+.sidebar-tabs{display:flex;border-bottom:1px solid var(--border)}
+.stab{
+  flex:1;padding:.75rem;text-align:center;cursor:pointer;
+  font-size:.75rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--muted);border:none;background:transparent;font-family:'Syne',sans-serif;
+  border-bottom:2px solid transparent;transition:all .2s;
+}
+.stab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+.spanel{display:none;flex:1;overflow:hidden;flex-direction:column}
+.spanel.active{display:flex}
+
+/* Participants panel */
+.participants-list{flex:1;overflow-y:auto;padding:1rem}
+.participant-item{
+  display:flex;align-items:center;gap:.75rem;padding:.75rem;
+  border:1px solid var(--border);border-radius:8px;margin-bottom:.5rem;
+  background:var(--card);
+}
+.p-avatar{
+  width:36px;height:36px;border-radius:50%;background:var(--surface);
+  border:2px solid var(--accent);display:flex;align-items:center;
+  justify-content:center;font-weight:800;font-size:.85rem;flex-shrink:0;
+}
+.p-info{flex:1;min-width:0}
+.p-name{font-size:.875rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.p-role{font-size:.7rem;color:var(--muted);font-family:'DM Mono',monospace}
+.p-actions{display:flex;gap:.35rem}
+.p-btn{
+  width:28px;height:28px;border-radius:4px;border:1px solid var(--border);
+  background:transparent;cursor:pointer;font-size:.75rem;display:flex;
+  align-items:center;justify-content:center;transition:all .2s;
+}
+.p-btn:hover{border-color:var(--accent);background:rgba(249,115,22,.1)}
+.p-btn.danger:hover{border-color:var(--red);background:rgba(239,68,68,.1)}
+.waiting-badge{font-size:.65rem;background:rgba(245,158,11,.15);color:#f59e0b;border:1px solid rgba(245,158,11,.3);padding:.1rem .4rem;border-radius:3px;margin-left:.25rem}
+.admit-btn{padding:.3rem .75rem;background:var(--green);border:none;border-radius:4px;color:#000;font-weight:700;font-size:.75rem;cursor:pointer;font-family:'Syne',sans-serif}
+
+/* Layout controls */
+.layout-panel{padding:1rem;overflow-y:auto}
+.layout-label{font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.75rem}
+.layout-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:1.5rem}
+.layout-btn{
+  padding:.75rem;border:1px solid var(--border);border-radius:8px;
+  background:var(--card);cursor:pointer;text-align:center;font-size:.75rem;
+  font-weight:700;color:var(--muted);transition:all .2s;font-family:'Syne',sans-serif;
+}
+.layout-btn:hover,.layout-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(249,115,22,.08)}
+.layout-icon{font-size:1.5rem;display:block;margin-bottom:.25rem}
+.invite-box{padding:1rem;border:1px solid var(--border);border-radius:8px;background:var(--card);margin-top:1rem}
+.invite-box label{font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:.5rem}
+.invite-link{
+  background:var(--bg);border:1px solid var(--border);border-radius:6px;
+  padding:.6rem;font-size:.7rem;font-family:'DM Mono',monospace;color:var(--accent);
+  word-break:break-all;cursor:pointer;transition:all .2s;
+}
+.invite-link:hover{border-color:var(--accent)}
+.copy-btn{
+  width:100%;margin-top:.5rem;padding:.5rem;background:var(--accent);border:none;
+  border-radius:6px;color:#000;font-weight:700;font-size:.75rem;cursor:pointer;
+  font-family:'Syne',sans-serif;transition:background .2s;
+}
+.copy-btn:hover{background:#fb923c}
+
+/* Chat panel */
+.chat-panel{display:flex;flex-direction:column;height:100%}
+.chat-messages{flex:1;overflow-y:auto;padding:1rem;display:flex;flex-direction:column;gap:.5rem}
+.chat-msg{font-size:.8rem;padding:.5rem .75rem;border-radius:6px;background:var(--card);border:1px solid var(--border)}
+.chat-msg-name{font-weight:700;color:var(--accent);margin-bottom:.2rem}
+.chat-msg-text{color:var(--text);line-height:1.5;word-break:break-word;font-family:'DM Mono',monospace;font-weight:300}
+.chat-msg-time{font-size:.65rem;color:var(--muted);margin-top:.2rem;font-family:'DM Mono',monospace}
+.chat-input-wrap{padding:.75rem;border-top:1px solid var(--border);display:flex;gap:.5rem}
+.chat-input{
+  flex:1;background:var(--bg);border:1px solid var(--border);border-radius:6px;
+  color:var(--text);padding:.5rem .75rem;font-family:'Syne',sans-serif;font-size:.85rem;
+  outline:none;
+}
+.chat-input:focus{border-color:var(--accent)}
+.chat-send{
+  padding:.5rem .75rem;background:var(--accent);border:none;border-radius:6px;
+  color:#000;font-weight:700;cursor:pointer;font-family:'Syne',sans-serif;
+}
+
+/* BOTTOM CONTROLS */
+.controls{
+  height:72px;background:var(--surface);border-top:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;gap:1rem;flex-shrink:0;
+}
+.ctrl{
+  width:48px;height:48px;border-radius:50%;border:1px solid var(--border);
+  background:var(--card);display:flex;align-items:center;justify-content:center;
+  cursor:pointer;font-size:1.1rem;transition:all .2s;position:relative;
+}
+.ctrl:hover{border-color:var(--accent);background:rgba(249,115,22,.1)}
+.ctrl.off{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.5)}
+.ctrl.off:hover{background:rgba(239,68,68,.25)}
+.ctrl-rec{
+  width:56px;height:56px;border-radius:50%;background:var(--red);border:none;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  font-size:1.2rem;box-shadow:0 0 24px rgba(239,68,68,.4);transition:all .3s;
+}
+.ctrl-rec.recording{background:#7f1d1d;box-shadow:0 0 24px rgba(239,68,68,.6)}
+.ctrl-rec:hover{transform:scale(1.05)}
+.ctrl-label{font-size:.6rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-top:.25rem;text-align:center}
+.ctrl-wrap{display:flex;flex-direction:column;align-items:center}
+.leave-btn{
+  padding:.6rem 1.5rem;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);
+  border-radius:6px;color:var(--red);font-weight:700;font-size:.8rem;cursor:pointer;
+  font-family:'Syne',sans-serif;margin-left:1rem;transition:all .2s;
+}
+.leave-btn:hover{background:rgba(239,68,68,.3)}
+
+/* Toast */
+.toast{
+  position:fixed;bottom:100px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--surface);border:1px solid var(--border);border-radius:8px;
+  padding:.75rem 1.5rem;font-size:.85rem;opacity:0;transition:all .3s;z-index:999;
+  white-space:nowrap;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo"><div class="logo-dot"></div>PodcastStudio</div>
+  <div class="session-info">
+    <span class="session-id" id="session-id-display" onclick="copyInvite()" title="Click to copy invite link">—</span>
+    <div class="rec-badge idle" id="rec-badge">
+      <div class="rec-dot"></div>
+      <span id="rec-status-text">READY</span>
+    </div>
+    <div class="timer" id="timer">00:00</div>
+  </div>
+  <div class="topbar-right">
+    <span style="font-size:.8rem;color:var(--muted)">HOST:</span>
+    <span style="font-size:.85rem;font-weight:700" id="host-name-display">—</span>
+  </div>
+</div>
+
+<div class="workspace">
+  <!-- Canvas Stage -->
+  <div class="canvas-area">
+    <div id="stage">
+      <div class="stage-grid layout-1" id="stage-grid">
+        <!-- Video tiles injected dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-tabs">
+      <button class="stab active" onclick="showPanel('participants')">Guests</button>
+      <button class="stab" onclick="showPanel('layout')">Layout</button>
+      <button class="stab" onclick="showPanel('chat')">Chat</button>
+    </div>
+
+    <div class="spanel active" id="panel-participants">
+      <div class="participants-list" id="participants-list">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+
+    <div class="spanel" id="panel-layout">
+      <div class="layout-panel">
+        <div class="layout-label">Choose Layout</div>
+        <div class="layout-grid">
+          <button class="layout-btn active" id="lb-solo" onclick="setLayout('solo')"><span class="layout-icon">▣</span>Solo</button>
+          <button class="layout-btn" id="lb-side" onclick="setLayout('side')"><span class="layout-icon">⬛⬛</span>Side by Side</button>
+          <button class="layout-btn" id="lb-spotlight" onclick="setLayout('spotlight')"><span class="layout-icon">⬛◻</span>Spotlight</button>
+          <button class="layout-btn" id="lb-grid" onclick="setLayout('grid')"><span class="layout-icon">⊞</span>Grid 2×2</button>
+        </div>
+        <div class="invite-box">
+          <label>Invite Link</label>
+          <div class="invite-link" id="invite-link-text">Loading...</div>
+          <button class="copy-btn" onclick="copyInvite()">📋 Copy Invite Link</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="spanel" id="panel-chat">
+      <div class="chat-panel">
+        <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-input-wrap">
+          <input type="text" class="chat-input" id="chat-input" placeholder="Send a message..." maxlength="200"/>
+          <button class="chat-send" onclick="sendChat()">→</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="controls">
+  <div class="ctrl-wrap">
+    <div class="ctrl" id="ctrl-mic" onclick="toggleMic()" title="Mute/Unmute">🎤</div>
+    <div class="ctrl-label">Mic</div>
+  </div>
+  <div class="ctrl-wrap">
+    <div class="ctrl" id="ctrl-cam" onclick="toggleCam()" title="Camera On/Off">📷</div>
+    <div class="ctrl-label">Camera</div>
+  </div>
+  <div class="ctrl-wrap">
+    <div class="ctrl-rec" id="ctrl-rec" onclick="toggleRecording()" title="Start/Stop Recording">⏺</div>
+    <div class="ctrl-label" id="rec-label">Start Rec</div>
+  </div>
+  <div class="ctrl-wrap">
+    <div class="ctrl" onclick="showPanel('layout')" title="Change Layout">⊞</div>
+    <div class="ctrl-label">Layout</div>
+  </div>
+  <div class="ctrl-wrap">
+    <div class="ctrl" onclick="showPanel('chat')" title="Chat">💬</div>
+    <div class="ctrl-label">Chat</div>
+  </div>
+  <button class="leave-btn" onclick="leaveSession()">End Session</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────
+const sessionId = window.location.pathname.split('/').pop();
+const myName = localStorage.getItem('myName') || 'Host';
+let socket, myStream, localRecorder;
+let peers = {}; // socketId -> RTCPeerConnection
+let remoteStreams = {}; // socketId -> MediaStream
+let peerRecorders = {}; // socketId -> MediaRecorder
+let combinedRecorder = null;
+let isRecording = false;
+let micOn = true, camOn = true;
+let currentLayout = 'solo';
+let timerInterval = null, timerSeconds = 0;
+let recordingChunks = {};
+let participantNames = {}; // socketId -> name
+
+const ICE_CONFIG = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' }
+  ]
+};
+
+// ── INIT ───────────────────────────────────────────────────
+document.getElementById('session-id-display').textContent = sessionId;
+document.getElementById('host-name-display').textContent = myName;
+participantNames['self'] = myName;
+
+const inviteUrl = `${window.location.origin}/join/${sessionId}`;
+document.getElementById('invite-link-text').textContent = inviteUrl;
+
+async function init() {
+  try {
+    myStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    addVideoTile('self', myName, myStream, true);
+    initSocket();
+  } catch (e) {
+    toast('⚠️ Camera/Mic access denied. Check permissions.');
+    console.error(e);
+    initSocket();
+  }
+}
+
+// ── SOCKET ─────────────────────────────────────────────────
+function initSocket() {
+  socket = io();
+
+  socket.emit('host:join', { sessionId, name: myName });
+
+  socket.on('session:joined', ({ participants }) => {
+    updateParticipantsList(participants);
+  });
+
+  socket.on('guest:request', ({ socketId, name }) => {
+    showGuestRequest(socketId, name);
+    addWaitingParticipant(socketId, name);
+  });
+
+  socket.on('participants:update', ({ participants }) => {
+    updateParticipantsList(participants);
+  });
+
+  socket.on('participant:left', ({ socketId, name }) => {
+    removeVideoTile(socketId);
+    closePeer(socketId);
+    toast(`${name} left the session`);
+  });
+
+  // WebRTC: make offer when told to
+  socket.on('webrtc:offer-needed', async ({ targetId, targetName }) => {
+    participantNames[targetId] = targetName;
+    const pc = createPeer(targetId);
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    socket.emit('webrtc:offer', { targetId, offer });
+  });
+
+  socket.on('webrtc:offer', async ({ fromId, fromName, offer }) => {
+    participantNames[fromId] = fromName;
+    const pc = createPeer(fromId);
+    await pc.setRemoteDescription(offer);
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    socket.emit('webrtc:answer', { targetId: fromId, answer });
+  });
+
+  socket.on('webrtc:answer', async ({ fromId, answer }) => {
+    const pc = peers[fromId];
+    if (pc) await pc.setRemoteDescription(answer);
+  });
+
+  socket.on('webrtc:ice', async ({ fromId, candidate }) => {
+    const pc = peers[fromId];
+    if (pc && candidate) {
+      try { await pc.addIceCandidate(candidate); } catch(e) {}
+    }
+  });
+
+  socket.on('recording:start', () => startAllRecorders());
+  socket.on('recording:stop', () => stopAllRecorders());
+  socket.on('chat:message', ({ name, message, time }) => addChatMsg(name, message, time));
+}
+
+// ── WEBRTC ─────────────────────────────────────────────────
+function createPeer(peerId) {
+  if (peers[peerId]) { peers[peerId].close(); }
+  const pc = new RTCPeerConnection(ICE_CONFIG);
+  peers[peerId] = pc;
+
+  // Add local tracks
+  if (myStream) {
+    myStream.getTracks().forEach(t => pc.addTrack(t, myStream));
+  }
+
+  pc.onicecandidate = ({ candidate }) => {
+    if (candidate) socket.emit('webrtc:ice', { targetId: peerId, candidate });
+  };
+
+  pc.ontrack = ({ streams }) => {
+    if (streams && streams[0]) {
+      remoteStreams[peerId] = streams[0];
+      const name = participantNames[peerId] || 'Guest';
+      addVideoTile(peerId, name, streams[0], false);
+    }
+  };
+
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+      closePeer(peerId);
+    }
+  };
+
+  return pc;
+}
+
+function closePeer(peerId) {
+  if (peers[peerId]) { peers[peerId].close(); delete peers[peerId]; }
+  delete remoteStreams[peerId];
+  removeVideoTile(peerId);
+}
+
+// ── VIDEO TILES ─────────────────────────────────────────────
+function addVideoTile(id, name, stream, mirror) {
+  let tile = document.getElementById(`tile-${id}`);
+  if (!tile) {
+    tile = document.createElement('div');
+    tile.className = 'video-tile';
+    tile.id = `tile-${id}`;
+  }
+  tile.innerHTML = '';
+
+  if (stream && stream.getVideoTracks().length > 0) {
+    const vid = document.createElement('video');
+    vid.autoplay = true;
+    vid.playsInline = true;
+    if (mirror) vid.style.transform = 'scaleX(-1)';
+    if (id === 'self') vid.muted = true;
+    vid.srcObject = stream;
+    tile.appendChild(vid);
+  } else {
+    const av = document.createElement('div');
+    av.className = 'tile-avatar';
+    av.textContent = name.charAt(0).toUpperCase();
+    tile.appendChild(av);
+  }
+
+  const label = document.createElement('div');
+  label.className = 'tile-label';
+  label.innerHTML = `${name}${id === 'self' ? ' <span style="color:var(--accent)">(you)</span>' : ''}`;
+  tile.appendChild(label);
+
+  const grid = document.getElementById('stage-grid');
+  if (!document.getElementById(`tile-${id}`)) grid.appendChild(tile);
+  else if (!grid.contains(tile)) grid.appendChild(tile);
+
+  updateLayout(currentLayout);
+}
+
+function removeVideoTile(id) {
+  const tile = document.getElementById(`tile-${id}`);
+  if (tile) tile.remove();
+  updateLayout(currentLayout);
+}
+
+// ── LAYOUT ─────────────────────────────────────────────────
+function setLayout(layout) {
+  currentLayout = layout;
+  document.querySelectorAll('.layout-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById(`lb-${layout === 'side' ? 'side' : layout === 'spotlight' ? 'spotlight' : layout === 'grid' ? 'grid' : 'solo'}`);
+  if (btn) btn.classList.add('active');
+  updateLayout(layout);
+  socket.emit('layout:change', { layout });
+}
+
+function updateLayout(layout) {
+  const grid = document.getElementById('stage-grid');
+  const tiles = Array.from(grid.children);
+  const count = tiles.length;
+  grid.className = 'stage-grid';
+
+  if (layout === 'solo' || count === 1) {
+    grid.classList.add('layout-1');
+  } else if (layout === 'side' || count === 2) {
+    grid.classList.add('layout-2');
+  } else if (layout === 'spotlight' || count === 3) {
+    grid.classList.add('layout-3');
+  } else {
+    grid.classList.add('layout-4');
+  }
+}
+
+// ── RECORDING ──────────────────────────────────────────────
+function toggleRecording() {
+  if (!isRecording) {
+    socket.emit('recording:start', { sessionId });
+  } else {
+    socket.emit('recording:stop', { sessionId });
+  }
+}
+
+function startAllRecorders() {
+  isRecording = true;
+  document.getElementById('ctrl-rec').classList.add('recording');
+  document.getElementById('rec-badge').className = 'rec-badge recording';
+  document.getElementById('rec-status-text').textContent = 'REC';
+  document.getElementById('rec-label').textContent = 'Stop Rec';
+  startTimer();
+
+  // Record own stream
+  if (myStream) startRecording('self', myName, myStream);
+
+  // Record each peer stream
+  Object.entries(remoteStreams).forEach(([id, stream]) => {
+    startRecording(id, participantNames[id] || 'Guest', stream);
+  });
+
+  toast('🔴 Recording started');
+}
+
+function startRecording(id, name, stream) {
+  if (!stream || !MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
+    console.warn('MediaRecorder not supported or no stream for', id);
+    return;
+  }
+  try {
+    const mr = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: 2500000 });
+    recordingChunks[id] = [];
+    mr.ondataavailable = e => { if (e.data.size > 0) recordingChunks[id].push(e.data); };
+    mr.start(1000);
+    peerRecorders[id] = mr;
+  } catch(e) {
+    console.error('Recorder error for', id, e);
+  }
+}
+
+async function stopAllRecorders() {
+  isRecording = false;
+  document.getElementById('ctrl-rec').classList.remove('recording');
+  document.getElementById('rec-badge').className = 'rec-badge idle';
+  document.getElementById('rec-status-text').textContent = 'DONE';
+  document.getElementById('rec-label').textContent = 'Start Rec';
+  stopTimer();
+
+  // Stop and upload all recorders
+  for (const [id, mr] of Object.entries(peerRecorders)) {
+    if (mr.state !== 'inactive') {
+      mr.stop();
+      await new Promise(r => mr.onstop = r);
+    }
+    const blob = new Blob(recordingChunks[id] || [], { type: 'video/webm' });
+    if (blob.size > 0) {
+      const name = id === 'self' ? myName : (participantNames[id] || 'Guest');
+      await uploadRecording(blob, id, name, 'individual');
+      downloadRecording(blob, `${name.replace(/\s+/g,'_')}_${sessionId}.webm`);
+    }
+  }
+  peerRecorders = {};
+  recordingChunks = {};
+  toast('✅ Recordings saved & downloaded');
+}
+
+async function uploadRecording(blob, participantId, participantName, type) {
+  const fd = new FormData();
+  fd.append('recording', blob, `recording.webm`);
+  fd.append('sessionId', sessionId);
+  fd.append('participantId', participantId);
+  fd.append('participantName', participantName);
+  fd.append('type', type);
+  try {
+    const res = await fetch('/api/recordings/upload', { method: 'POST', body: fd });
+    return await res.json();
+  } catch(e) {
+    console.error('Upload failed:', e);
+  }
+}
+
+function downloadRecording(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+// ── TIMER ──────────────────────────────────────────────────
+function startTimer() {
+  timerSeconds = 0;
+  timerInterval = setInterval(() => {
+    timerSeconds++;
+    const m = String(Math.floor(timerSeconds / 60)).padStart(2, '0');
+    const s = String(timerSeconds % 60).padStart(2, '0');
+    document.getElementById('timer').textContent = `${m}:${s}`;
+  }, 1000);
+}
+function stopTimer() {
+  clearInterval(timerInterval);
+  document.getElementById('timer').textContent = '00:00';
+}
+
+// ── MIC / CAM ──────────────────────────────────────────────
+function toggleMic() {
+  if (!myStream) return;
+  micOn = !micOn;
+  myStream.getAudioTracks().forEach(t => t.enabled = micOn);
+  const ctrl = document.getElementById('ctrl-mic');
+  ctrl.textContent = micOn ? '🎤' : '🔇';
+  ctrl.classList.toggle('off', !micOn);
+}
+
+function toggleCam() {
+  if (!myStream) return;
+  camOn = !camOn;
+  myStream.getVideoTracks().forEach(t => t.enabled = camOn);
+  const ctrl = document.getElementById('ctrl-cam');
+  ctrl.textContent = camOn ? '📷' : '🚫';
+  ctrl.classList.toggle('off', !camOn);
+}
+
+// ── PARTICIPANTS ────────────────────────────────────────────
+function showGuestRequest(socketId, name) {
+  toast(`🔔 ${name} wants to join — click Admit in Guests tab`);
+  showPanel('participants');
+}
+
+function addWaitingParticipant(socketId, name) {
+  const list = document.getElementById('participants-list');
+  let item = document.getElementById(`p-${socketId}`);
+  if (!item) {
+    item = document.createElement('div');
+    item.className = 'participant-item';
+    item.id = `p-${socketId}`;
+  }
+  item.innerHTML = `
+    <div class="p-avatar">${name.charAt(0).toUpperCase()}</div>
+    <div class="p-info">
+      <div class="p-name">${name} <span class="waiting-badge">Waiting</span></div>
+      <div class="p-role">guest</div>
+    </div>
+    <div class="p-actions">
+      <button class="admit-btn" onclick="admitGuest('${socketId}')">Admit</button>
+      <div class="p-btn danger" onclick="kickGuest('${socketId}')" title="Remove">✕</div>
+    </div>
+  `;
+  list.appendChild(item);
+}
+
+function updateParticipantsList(participants) {
+  const list = document.getElementById('participants-list');
+  list.innerHTML = '';
+  Object.values(participants).forEach(p => {
+    participantNames[p.socketId] = p.name;
+    const item = document.createElement('div');
+    item.className = 'participant-item';
+    item.id = `p-${p.socketId}`;
+    const isWaiting = p.status === 'waiting';
+    item.innerHTML = `
+      <div class="p-avatar" style="border-color:${p.role==='host'?'var(--accent)':'var(--green)'}">${p.name.charAt(0).toUpperCase()}</div>
+      <div class="p-info">
+        <div class="p-name">${p.name} ${isWaiting ? '<span class="waiting-badge">Waiting</span>' : ''}${p.role==='host'?'<span style="font-size:.65rem;color:var(--accent);margin-left:.25rem">HOST</span>':''}</div>
+        <div class="p-role">${p.role}</div>
+      </div>
+      <div class="p-actions">
+        ${isWaiting ? `<button class="admit-btn" onclick="admitGuest('${p.socketId}')">Admit</button>` : ''}
+        ${p.role !== 'host' ? `<div class="p-btn" onclick="muteGuest('${p.socketId}')" title="Mute">🔇</div><div class="p-btn danger" onclick="kickGuest('${p.socketId}')" title="Remove">✕</div>` : ''}
+      </div>
+    `;
+    list.appendChild(item);
+  });
+}
+
+function admitGuest(socketId) {
+  socket.emit('host:admit', { guestSocketId: socketId });
+  const el = document.querySelector(`#p-${socketId} .waiting-badge`);
+  if (el) el.remove();
+  const admitBtn = document.querySelector(`#p-${socketId} .admit-btn`);
+  if (admitBtn) admitBtn.remove();
+  toast(`Guest admitted`);
+}
+
+function kickGuest(socketId) {
+  socket.emit('host:kick', { guestSocketId: socketId });
+  removeVideoTile(socketId);
+  document.getElementById(`p-${socketId}`)?.remove();
+}
+
+function muteGuest(socketId) {
+  socket.emit('host:mute', { targetId: socketId, muted: true });
+  toast('Guest muted');
+}
+
+// ── CHAT ───────────────────────────────────────────────────
+function sendChat() {
+  const input = document.getElementById('chat-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+  socket.emit('chat:message', { message: msg });
+  input.value = '';
+}
+
+document.getElementById('chat-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendChat();
+});
+
+function addChatMsg(name, message, time) {
+  const msgs = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'chat-msg';
+  div.innerHTML = `<div class="chat-msg-name">${name}</div><div class="chat-msg-text">${message}</div><div class="chat-msg-time">${new Date(time).toLocaleTimeString()}</div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+// ── UI HELPERS ─────────────────────────────────────────────
+function showPanel(panel) {
+  document.querySelectorAll('.spanel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.stab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`panel-${panel}`).classList.add('active');
+  const tabs = { participants: 0, layout: 1, chat: 2 };
+  document.querySelectorAll('.stab')[tabs[panel]]?.classList.add('active');
+}
+
+function copyInvite() {
+  navigator.clipboard.writeText(inviteUrl).then(() => toast('📋 Invite link copied!')).catch(() => {
+    prompt('Copy this invite link:', inviteUrl);
+  });
+}
+
+function toast(msg, duration = 3000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), duration);
+}
+
+function leaveSession() {
+  if (isRecording) {
+    if (!confirm('Recording is active. Stop recording and end session?')) return;
+    socket.emit('recording:stop', { sessionId });
+  }
+  socket.disconnect();
+  window.location.href = '/';
+}
+
+// Start
+init();
+</script>
+</body>
+</html>

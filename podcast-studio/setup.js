@@ -1,0 +1,10 @@
+const fs = require('fs');
+const path = require('path');
+const base = __dirname;
+fs.mkdirSync(path.join(base, 'podcast-studio/public'), { recursive: true });
+fs.mkdirSync(path.join(base, 'podcast-studio/server'), { recursive: true });
+fs.copyFileSync(path.join(base, 'index.html'), path.join(base, 'podcast-studio/public/index.html'));
+fs.copyFileSync(path.join(base, 'join.html'), path.join(base, 'podcast-studio/public/join.html'));
+fs.copyFileSync(path.join(base, 'session.html'), path.join(base, 'podcast-studio/public/session.html'));
+fs.copyFileSync(path.join(base, 'server_index.js'), path.join(base, 'podcast-studio/server/index.js'));
+console.log("Done");
