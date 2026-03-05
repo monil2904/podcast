@@ -1025,6 +1025,10 @@
         participantNames[fromId] = fromName || 'Guest';
         const pc = createPeer(fromId);
         await pc.setRemoteDescription(offer);
+        if (pc.iceQueue) {
+          for (const c of pc.iceQueue) try { await pc.addIceCandidate(c); } catch (e) { }
+          pc.iceQueue = [];
+        }
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         socket.emit('webrtc:answer', { targetId: fromId, answer });
@@ -1032,12 +1036,25 @@
 
       socket.on('webrtc:answer', async ({ fromId, answer }) => {
         const pc = peers[fromId];
-        if (pc) await pc.setRemoteDescription(answer);
+        if (pc) {
+          await pc.setRemoteDescription(answer);
+          if (pc.iceQueue) {
+            for (const c of pc.iceQueue) try { await pc.addIceCandidate(c); } catch (e) { }
+            pc.iceQueue = [];
+          }
+        }
       });
 
       socket.on('webrtc:ice', async ({ fromId, candidate }) => {
         const pc = peers[fromId];
-        if (pc && candidate) { try { await pc.addIceCandidate(candidate); } catch (e) { } }
+        if (pc && candidate) {
+          if (!pc.remoteDescription) {
+            pc.iceQueue = pc.iceQueue || [];
+            pc.iceQueue.push(candidate);
+          } else {
+            try { await pc.addIceCandidate(candidate); } catch (e) { }
+          }
+        }
       });
 
       socket.on('recording:start', () => {
