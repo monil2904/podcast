@@ -982,12 +982,17 @@
         if (candidate) socket.emit('webrtc:ice', { targetId: peerId, candidate });
       };
 
-      pc.ontrack = ({ streams }) => {
-        if (streams && streams[0]) {
-          remoteStreams[peerId] = streams[0];
-          const name = participantNames[peerId] || 'Guest';
-          addVideoTile(peerId, name, streams[0], false);
+      pc.ontrack = (event) => {
+        let stream = remoteStreams[peerId];
+        if (!stream) {
+          stream = new MediaStream();
+          remoteStreams[peerId] = stream;
         }
+        if (stream.getTracks().indexOf(event.track) === -1) {
+          stream.addTrack(event.track);
+        }
+        const name = participantNames[peerId] || 'Guest';
+        addVideoTile(peerId, name, stream, false);
       };
 
       pc.onconnectionstatechange = () => {
@@ -1028,6 +1033,14 @@
         av.className = 'tile-avatar';
         av.textContent = name.charAt(0).toUpperCase();
         tile.appendChild(av);
+
+        if (stream && stream.getAudioTracks().length > 0) {
+          const aud = document.createElement('audio');
+          aud.autoplay = true;
+          if (id === 'self') aud.muted = true;
+          aud.srcObject = stream;
+          tile.appendChild(aud);
+        }
       }
 
       const label = document.createElement('div');
@@ -1040,6 +1053,14 @@
       else if (!grid.contains(tile)) grid.appendChild(tile);
 
       updateLayout(currentLayout);
+
+      const media = tile.querySelector('video, audio');
+      if (media) {
+        const playPromise = media.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(e => console.warn('Autoplay prevented:', e));
+        }
+      }
     }
 
     function removeVideoTile(id) {
