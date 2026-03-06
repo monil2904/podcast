@@ -99,8 +99,6 @@
       align-items: start
     }
 
-    .preview-section {}
-
     .preview-video-wrap {
       border-radius: 12px;
       overflow: hidden;
@@ -162,8 +160,6 @@
       border-color: rgba(239, 68, 68, .4);
       color: var(--red)
     }
-
-    .setup-form-section {}
 
     .form-title {
       font-size: 2rem;
@@ -486,7 +482,8 @@
       border-radius: 4px;
       padding: .2rem .6rem;
       font-size: .7rem;
-      font-weight: 700
+      font-weight: 700;
+      z-index: 10;
     }
 
     .tile-avatar {
@@ -736,6 +733,59 @@
     ::-webkit-scrollbar-thumb {
       background: var(--border);
       border-radius: 2px
+    }
+
+    @media (max-width: 768px) {
+      .setup-container {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+      }
+
+      .studio-workspace {
+        flex-direction: column;
+      }
+
+      .guest-sidebar {
+        width: 100%;
+        height: 40vh;
+        flex-shrink: 0;
+        border-left: none;
+        border-top: 1px solid var(--border);
+      }
+
+      #guest-stage {
+        aspect-ratio: auto;
+        height: 100%;
+        width: 100%;
+      }
+
+      .studio-stage {
+        padding: 0.5rem;
+        flex: 1;
+      }
+
+      .guest-grid.l2,
+      .guest-grid.l3,
+      .guest-grid.l4 {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto;
+      }
+
+      .studio-controls {
+        height: 60px;
+        gap: 0.5rem;
+      }
+
+      .ctrl {
+        width: 36px;
+        height: 36px;
+        font-size: 1rem;
+      }
+
+      .leave-btn {
+        padding: 0.4rem 0.8rem;
+        font-size: 0.75rem;
+      }
     }
   </style>
 </head>
@@ -1141,8 +1191,26 @@
       const grid = document.getElementById('guest-grid');
       let tile = document.getElementById(`gt-${id}`);
       if (!tile) { tile = document.createElement('div'); tile.className = 'video-tile'; tile.id = `gt-${id}`; grid.appendChild(tile); }
+
+      const hasVideo = stream && stream.getVideoTracks().length > 0;
+      const hasAudio = stream && stream.getAudioTracks().length > 0;
+
+      if (hasVideo && tile.querySelector('video')) {
+        const vid = tile.querySelector('video');
+        if (vid.srcObject !== stream) vid.srcObject = stream;
+        autoUpdateLayout();
+        return;
+      }
+
+      if (!hasVideo && hasAudio && tile.querySelector('audio')) {
+        const aud = tile.querySelector('audio');
+        if (aud.srcObject !== stream) aud.srcObject = stream;
+        autoUpdateLayout();
+        return;
+      }
+
       tile.innerHTML = '';
-      if (stream && stream.getVideoTracks().length > 0) {
+      if (hasVideo) {
         const vid = document.createElement('video');
         vid.autoplay = true; vid.playsInline = true;
         if (mirror) vid.style.transform = 'scaleX(-1)';
@@ -1155,7 +1223,7 @@
         av.textContent = name.charAt(0).toUpperCase();
         tile.appendChild(av);
 
-        if (stream && stream.getAudioTracks().length > 0) {
+        if (hasAudio) {
           const aud = document.createElement('audio');
           aud.autoplay = true;
           if (id === 'self') aud.muted = true;
@@ -1203,6 +1271,21 @@
         item.className = 'g-item';
         item.innerHTML = `<div class="g-av">${p.name.charAt(0).toUpperCase()}</div><span style="font-size:.8rem;font-weight:700">${p.name}${p.role === 'host' ? ' <span style="color:var(--accent);font-size:.65rem">HOST</span>' : ''}</span>`;
         list.appendChild(item);
+
+        // Ensure a tile exists for this participant even before receiving stream
+        if (p.socketId !== socket.id) {
+          const stream = remoteStreams[p.socketId];
+          addGuestVideoTile(p.socketId, p.name, stream || null, false);
+        }
+      });
+
+      // Cleanup tiles for participants who left
+      const participantIds = Object.keys(participants);
+      Array.from(document.getElementById('guest-grid').children).forEach(tile => {
+        const id = tile.id.replace('gt-', '');
+        if (id !== 'self' && !participantIds.includes(id)) {
+          removeGuestTile(id);
+        }
       });
     }
 

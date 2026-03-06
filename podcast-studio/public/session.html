@@ -244,6 +244,7 @@
       align-items: center;
       gap: .3rem;
       backdrop-filter: blur(4px);
+      z-index: 10;
     }
 
     .tile-avatar {
@@ -725,7 +726,6 @@
       transform: translateX(-50%) translateY(0)
     }
 
-    /* Scrollbar */
     ::-webkit-scrollbar {
       width: 4px
     }
@@ -737,6 +737,69 @@
     ::-webkit-scrollbar-thumb {
       background: var(--border);
       border-radius: 2px
+    }
+
+    /* MOBILE RESPONSIVE */
+    @media (max-width: 768px) {
+      .workspace {
+        flex-direction: column;
+      }
+
+      .sidebar {
+        width: 100%;
+        height: 40vh;
+        flex-shrink: 0;
+        border-left: none;
+        border-top: 1px solid var(--border);
+      }
+
+      #stage {
+        aspect-ratio: auto;
+        height: 100%;
+        width: 100%;
+      }
+
+      .canvas-area {
+        padding: 0.5rem;
+        flex: 1;
+      }
+
+      .stage-grid.layout-2,
+      .stage-grid.layout-3,
+      .stage-grid.layout-4 {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto;
+      }
+
+      .controls {
+        height: 60px;
+        gap: 0.5rem;
+      }
+
+      .ctrl {
+        width: 36px;
+        height: 36px;
+        font-size: 1rem;
+      }
+
+      .ctrl-rec {
+        width: 44px;
+        height: 44px;
+        font-size: 1rem;
+      }
+
+      .leave-btn {
+        padding: 0.4rem 0.8rem;
+        margin-left: 0.5rem;
+      }
+
+      .session-info {
+        gap: 0.5rem;
+      }
+
+      .session-id {
+        display: none;
+      }
     }
   </style>
 </head>
@@ -916,7 +979,9 @@
         await loadAdminDeviceSelects();
         initSocket();
       } catch (e) {
-        console.error(e);
+        console.error("Camera access error:", e);
+        // Add tile anyway so host avatar is visible
+        addVideoTile('self', myName, null, false);
         initSocket();
       }
     }
@@ -1367,6 +1432,20 @@
       </div>
     `;
         list.appendChild(item);
+
+        if (!isWaiting && p.socketId !== socket.id) {
+          const stream = remoteStreams[p.socketId];
+          addVideoTile(p.socketId, p.name, stream || null, false);
+        }
+      });
+
+      // Cleanup
+      const ids = Object.keys(participants);
+      Array.from(document.getElementById('stage-grid').children).forEach(tile => {
+        const id = tile.id.replace('tile-', '');
+        if (id !== 'self' && !ids.includes(id)) {
+          removeVideoTile(id);
+        }
       });
     }
 
