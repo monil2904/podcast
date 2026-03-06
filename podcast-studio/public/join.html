@@ -747,28 +747,56 @@
 
       .guest-sidebar {
         width: 100%;
-        height: 40vh;
+        height: 35vh;
+        min-height: 250px;
         flex-shrink: 0;
         border-left: none;
         border-top: 1px solid var(--border);
+      }
+
+      .studio-stage {
+        padding: 0;
+        flex: 1;
       }
 
       #guest-stage {
         aspect-ratio: auto;
         height: 100%;
         width: 100%;
+        border-radius: 0;
+        border: none;
       }
 
-      .studio-stage {
-        padding: 0.5rem;
-        flex: 1;
+      .guest-grid {
+        display: flex;
+        flex-direction: column;
       }
 
-      .guest-grid.l2,
+      .guest-grid.l2 {
+        display: grid;
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr 1fr;
+      }
+
       .guest-grid.l3,
       .guest-grid.l4 {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr 1fr;
+      }
+
+      .guest-grid.l3 .video-tile:first-child {
+        grid-column: span 2;
+      }
+
+      .video-tile {
+        flex: 1;
+        width: 100%;
+        height: 100%;
+      }
+
+      .studio-topbar {
+        padding: 0 1rem;
       }
 
       .studio-controls {
@@ -777,14 +805,19 @@
       }
 
       .ctrl {
-        width: 36px;
-        height: 36px;
+        width: 38px;
+        height: 38px;
         font-size: 1rem;
       }
 
       .leave-btn {
-        padding: 0.4rem 0.8rem;
+        padding: 0.5rem 0.8rem;
         font-size: 0.75rem;
+        margin-left: auto;
+      }
+
+      .ctrl-label {
+        font-size: 0.5rem;
       }
     }
   </style>
@@ -1113,10 +1146,10 @@
         document.getElementById('guest-rec-text').textContent = 'REC';
         document.getElementById('guest-rec-label').classList.add('show');
         startTimer();
-        // Record own stream
-        if (myStream) startRecording('self', myName, myStream);
-        // Record peer streams
-        Object.entries(remoteStreams).forEach(([id, s]) => startRecording(id, participantNames[id] || 'Guest', s));
+        // Record own stream only for high-quality local copy
+        if (myStream) {
+          startRecording('self', myName, myStream);
+        }
       });
 
       socket.on('recording:stop', () => {
@@ -1309,8 +1342,7 @@
         const blob = new Blob(recordingChunks[id] || [], { type: 'video/webm' });
         if (blob.size > 0) {
           const name = id === 'self' ? myName : (participantNames[id] || 'Guest');
-          downloadBlob(blob, `${name.replace(/\s+/g, '_')}_${sessionId}.webm`);
-          // Upload to server
+          // Upload to server only - guests don't download it directly
           const fd = new FormData();
           fd.append('recording', blob); fd.append('sessionId', sessionId);
           fd.append('participantId', mySocketId || 'guest'); fd.append('participantName', name); fd.append('type', 'individual');
@@ -1321,6 +1353,7 @@
     }
 
     function downloadBlob(blob, filename) {
+      // Kept for potential future use or debugging, but no longer used automatically for guests
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url; a.download = filename;

@@ -747,28 +747,56 @@
 
       .sidebar {
         width: 100%;
-        height: 40vh;
+        height: 35vh;
+        min-height: 250px;
         flex-shrink: 0;
         border-left: none;
         border-top: 1px solid var(--border);
       }
 
+      .canvas-area {
+        padding: 0;
+        flex: 1;
+      }
+
       #stage {
+        border-radius: 0;
+        border: none;
         aspect-ratio: auto;
         height: 100%;
         width: 100%;
       }
 
-      .canvas-area {
-        padding: 0.5rem;
-        flex: 1;
+      .stage-grid {
+        display: flex;
+        flex-direction: column;
       }
 
-      .stage-grid.layout-2,
+      .stage-grid.layout-2 {
+        display: grid;
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr 1fr;
+      }
+
       .stage-grid.layout-3,
       .stage-grid.layout-4 {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr 1fr;
+      }
+
+      .stage-grid.layout-3 .video-tile:first-child {
+        grid-column: span 2;
+      }
+
+      .video-tile {
+        flex: 1;
+        width: 100%;
+        height: 100%;
+      }
+
+      .topbar {
+        padding: 0 1rem;
       }
 
       .controls {
@@ -777,8 +805,8 @@
       }
 
       .ctrl {
-        width: 36px;
-        height: 36px;
+        width: 38px;
+        height: 38px;
         font-size: 1rem;
       }
 
@@ -789,8 +817,9 @@
       }
 
       .leave-btn {
-        padding: 0.4rem 0.8rem;
-        margin-left: 0.5rem;
+        padding: 0.5rem 0.8rem;
+        margin-left: auto;
+        font-size: 0.75rem;
       }
 
       .session-info {
@@ -799,6 +828,10 @@
 
       .session-id {
         display: none;
+      }
+
+      .ctrl-label {
+        font-size: 0.5rem;
       }
     }
   </style>
