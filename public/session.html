@@ -915,11 +915,11 @@
   </div>
 
   <div class="controls">
-    <div class="ctrl-wrap" style="display: none;">
+    <div class="ctrl-wrap">
       <div class="ctrl" id="ctrl-mic" onclick="toggleMic()" title="Mute/Unmute">🎤</div>
       <div class="ctrl-label">Mic</div>
     </div>
-    <div class="ctrl-wrap" style="display: none;">
+    <div class="ctrl-wrap">
       <div class="ctrl" id="ctrl-cam" onclick="toggleCam()" title="Camera On/Off">📷</div>
       <div class="ctrl-label">Camera</div>
     </div>
@@ -988,11 +988,14 @@
 
     async function init() {
       try {
-        // Host is an admin, no camera or mic needed
-        myStream = null;
+        myStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        addVideoTile('self', myName, myStream, true);
+        if (typeof loadAdminDeviceSelects === 'function') await loadAdminDeviceSelects();
         initSocket();
       } catch (e) {
-        console.error(e);
+        console.error("Camera access error:", e);
+        // Add tile anyway so host avatar is visible
+        addVideoTile('self', myName, null, false);
         initSocket();
       }
     }

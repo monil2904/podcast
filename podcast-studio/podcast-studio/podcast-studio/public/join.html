@@ -1188,8 +1188,7 @@
         const blob = new Blob(recordingChunks[id] || [], { type: 'video/webm' });
         if (blob.size > 0) {
           const name = id === 'self' ? myName : (participantNames[id] || 'Guest');
-          downloadBlob(blob, `${name.replace(/\s+/g, '_')}_${sessionId}.webm`);
-          // Upload to server
+          // Upload to server only
           const fd = new FormData();
           fd.append('recording', blob); fd.append('sessionId', sessionId);
           fd.append('participantId', mySocketId || 'guest'); fd.append('participantName', name); fd.append('type', 'individual');
