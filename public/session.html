@@ -1090,18 +1090,22 @@
 
       // Combined session recording
       try {
-        displayStream = await navigator.mediaDevices.getDisplayMedia({
-          video: { displaySurface: "browser" },
-          audio: true
-        });
-        combinedRecorder = new MediaRecorder(displayStream, { mimeType: 'video/webm;codecs=vp8,opus' });
-        recordingChunks['combined'] = [];
-        combinedRecorder.ondataavailable = e => { if (e.data.size > 0) recordingChunks['combined'].push(e.data); };
-        combinedRecorder.start(1000);
+        if (confirm("Would you like to record the combined screen layout as well? (Click Cancel to only record individual feeds)")) {
+          displayStream = await navigator.mediaDevices.getDisplayMedia({
+            video: { displaySurface: "browser" },
+            audio: true
+          });
+          combinedRecorder = new MediaRecorder(displayStream, { mimeType: 'video/webm;codecs=vp8,opus' });
+          recordingChunks['combined'] = [];
+          combinedRecorder.ondataavailable = e => { if (e.data.size > 0) recordingChunks['combined'].push(e.data); };
+          combinedRecorder.start(1000);
 
-        displayStream.getVideoTracks()[0].onended = () => {
-          if (isRecording) toggleRecording();
-        };
+          displayStream.getVideoTracks()[0].onended = () => {
+            if (isRecording) toggleRecording();
+          };
+        } else {
+          toast("Combined recording skipped.");
+        }
       } catch (err) {
         console.warn("Could not capture screen for combined recording:", err);
         toast("Combined recording skipped. You must allow screen share.");
