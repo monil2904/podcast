@@ -777,6 +777,7 @@
         <button class="stab active" onclick="showPanel('participants')">Guests</button>
         <button class="stab" onclick="showPanel('layout')">Layout</button>
         <button class="stab" onclick="showPanel('chat')">Chat</button>
+        <button class="stab" onclick="showPanel('settings')">Settings</button>
       </div>
 
       <div class="spanel active" id="panel-participants">
@@ -815,15 +816,33 @@
           </div>
         </div>
       </div>
+
+      <div class="spanel" id="panel-settings">
+        <div class="layout-panel">
+          <div class="layout-label">Media Settings</div>
+          <div style="margin-bottom: 1rem;">
+            <label
+              style="font-size: .7rem; font-weight: 700; color: var(--muted); display: block; margin-bottom: .5rem; text-transform: uppercase;">Microphone</label>
+            <select id="admin-mic-select" class="chat-input" style="width: 100%; border-radius: 6px; padding: 0.5rem;"
+              onchange="changeAdminDevice()"></select>
+          </div>
+          <div style="margin-bottom: 1rem;">
+            <label
+              style="font-size: .7rem; font-weight: 700; color: var(--muted); display: block; margin-bottom: .5rem; text-transform: uppercase;">Camera</label>
+            <select id="admin-cam-select" class="chat-input" style="width: 100%; border-radius: 6px; padding: 0.5rem;"
+              onchange="changeAdminDevice()"></select>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
   <div class="controls">
-    <div class="ctrl-wrap" style="display: none;">
+    <div class="ctrl-wrap">
       <div class="ctrl" id="ctrl-mic" onclick="toggleMic()" title="Mute/Unmute">🎤</div>
       <div class="ctrl-label">Mic</div>
     </div>
-    <div class="ctrl-wrap" style="display: none;">
+    <div class="ctrl-wrap">
       <div class="ctrl" id="ctrl-cam" onclick="toggleCam()" title="Camera On/Off">📷</div>
       <div class="ctrl-label">Camera</div>
     </div>
@@ -892,8 +911,9 @@
 
     async function init() {
       try {
-        // Host is an admin, no camera or mic needed
-        myStream = null;
+        myStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        addVideoTile('self', myName, myStream, true);
+        await loadAdminDeviceSelects();
         initSocket();
       } catch (e) {
         console.error(e);
@@ -998,13 +1018,19 @@
       };
 
       pc.ontrack = (event) => {
-        let stream = remoteStreams[peerId];
-        if (!stream) {
-          stream = new MediaStream();
+        let stream = null;
+        if (event.streams && event.streams[0]) {
+          stream = event.streams[0];
           remoteStreams[peerId] = stream;
-        }
-        if (stream.getTracks().indexOf(event.track) === -1) {
-          stream.addTrack(event.track);
+        } else {
+          stream = remoteStreams[peerId];
+          if (!stream) {
+            stream = new MediaStream();
+            remoteStreams[peerId] = stream;
+          }
+          if (!stream.getTracks().some(t => t.id === event.track.id)) {
+            stream.addTrack(event.track);
+          }
         }
         const name = participantNames[peerId] || 'Guest';
         addVideoTile(peerId, name, stream, false);
@@ -1027,15 +1053,35 @@
 
     // ── VIDEO TILES ─────────────────────────────────────────────
     function addVideoTile(id, name, stream, mirror) {
+      const grid = document.getElementById('stage-grid');
       let tile = document.getElementById(`tile-${id}`);
       if (!tile) {
         tile = document.createElement('div');
         tile.className = 'video-tile';
         tile.id = `tile-${id}`;
+        grid.appendChild(tile);
       }
+
+      const hasVideo = stream && stream.getVideoTracks().length > 0;
+      const hasAudio = stream && stream.getAudioTracks().length > 0;
+
+      if (hasVideo && tile.querySelector('video')) {
+        const vid = tile.querySelector('video');
+        if (vid.srcObject !== stream) vid.srcObject = stream;
+        updateLayout(currentLayout);
+        return;
+      }
+
+      if (!hasVideo && hasAudio && tile.querySelector('audio')) {
+        const aud = tile.querySelector('audio');
+        if (aud.srcObject !== stream) aud.srcObject = stream;
+        updateLayout(currentLayout);
+        return;
+      }
+
       tile.innerHTML = '';
 
-      if (stream && stream.getVideoTracks().length > 0) {
+      if (hasVideo) {
         const vid = document.createElement('video');
         vid.autoplay = true;
         vid.playsInline = true;
@@ -1049,7 +1095,7 @@
         av.textContent = name.charAt(0).toUpperCase();
         tile.appendChild(av);
 
-        if (stream && stream.getAudioTracks().length > 0) {
+        if (hasAudio) {
           const aud = document.createElement('audio');
           aud.autoplay = true;
           if (id === 'self') aud.muted = true;
@@ -1062,10 +1108,6 @@
       label.className = 'tile-label';
       label.innerHTML = `${name}${id === 'self' ? ' <span style="color:var(--accent)">(you)</span>' : ''}`;
       tile.appendChild(label);
-
-      const grid = document.getElementById('stage-grid');
-      if (!document.getElementById(`tile-${id}`)) grid.appendChild(tile);
-      else if (!grid.contains(tile)) grid.appendChild(tile);
 
       updateLayout(currentLayout);
 
@@ -1371,7 +1413,7 @@
       document.querySelectorAll('.spanel').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.stab').forEach(t => t.classList.remove('active'));
       document.getElementById(`panel-${panel}`).classList.add('active');
-      const tabs = { participants: 0, layout: 1, chat: 2 };
+      const tabs = { participants: 0, layout: 1, chat: 2, settings: 3 };
       document.querySelectorAll('.stab')[tabs[panel]]?.classList.add('active');
     }
 
@@ -1395,6 +1437,82 @@
       }
       socket.disconnect();
       window.location.href = '/';
+    }
+
+    async function loadAdminDeviceSelects() {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const micSel = document.getElementById('admin-mic-select');
+      const camSel = document.getElementById('admin-cam-select');
+      micSel.innerHTML = '';
+      camSel.innerHTML = '';
+      devices.forEach(d => {
+        if (d.kind === 'audioinput') {
+          const opt = document.createElement('option');
+          opt.value = d.deviceId;
+          opt.textContent = d.label || `Microphone ${micSel.length + 1}`;
+          micSel.appendChild(opt);
+        } else if (d.kind === 'videoinput') {
+          const opt = document.createElement('option');
+          opt.value = d.deviceId;
+          opt.textContent = d.label || `Camera ${camSel.length + 1}`;
+          camSel.appendChild(opt);
+        }
+      });
+      if (myStream) {
+        const audioTracks = myStream.getAudioTracks();
+        if (audioTracks.length > 0) {
+          const currentAudioDevice = audioTracks[0].getSettings().deviceId;
+          if (currentAudioDevice) micSel.value = currentAudioDevice;
+        }
+        const videoTracks = myStream.getVideoTracks();
+        if (videoTracks.length > 0) {
+          const currentVideoDevice = videoTracks[0].getSettings().deviceId;
+          if (currentVideoDevice) camSel.value = currentVideoDevice;
+        }
+      }
+    }
+
+    async function changeAdminDevice() {
+      const audioId = document.getElementById('admin-mic-select').value;
+      const videoId = document.getElementById('admin-cam-select').value;
+
+      const constraints = {
+        audio: audioId ? { deviceId: { exact: audioId } } : true,
+        video: videoId ? { deviceId: { exact: videoId } } : true
+      };
+
+      try {
+        const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+        if (myStream) {
+          myStream.getTracks().forEach(t => t.stop());
+        }
+        myStream = newStream;
+        myStream.getAudioTracks().forEach(t => t.enabled = micOn);
+        myStream.getVideoTracks().forEach(t => t.enabled = camOn);
+
+        addVideoTile('self', myName, myStream, true);
+
+        // Update peers
+        Object.values(peers).forEach(pc => {
+          const senders = pc.getSenders();
+          const videoTrack = myStream.getVideoTracks()[0];
+          const audioTrack = myStream.getAudioTracks()[0];
+
+          if (videoTrack) {
+            const vSender = senders.find(s => s.track && s.track.kind === 'video');
+            if (vSender) vSender.replaceTrack(videoTrack);
+            else pc.addTrack(videoTrack, myStream);
+          }
+          if (audioTrack) {
+            const aSender = senders.find(s => s.track && s.track.kind === 'audio');
+            if (aSender) aSender.replaceTrack(audioTrack);
+            else pc.addTrack(audioTrack, myStream);
+          }
+        });
+      } catch (e) {
+        console.error('Failed to change device', e);
+        toast('Failed to access selected device');
+      }
     }
 
     // Start

@@ -1,660 +1,1293 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Join Session — PodcastStudio</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
-<script src="/socket.io/socket.io.js"></script>
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#060810;--bg2:#0d1117;--surface:#111827;--border:#1f2937;
-  --accent:#f97316;--green:#22c55e;--red:#ef4444;--blue:#3b82f6;
-  --text:#f1f5f9;--muted:#64748b;--card:#0f1623;
-}
-body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;display:flex;flex-direction:column}
-body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 80% 60% at 50% -20%,rgba(249,115,22,.1),transparent);pointer-events:none}
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Join Session — PodcastStudio</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap"
+    rel="stylesheet" />
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0
+    }
 
-nav{padding:1.25rem 2.5rem;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);background:rgba(6,8,16,.9)}
-.logo{font-size:1.1rem;font-weight:800;display:flex;align-items:center;gap:.5rem}
-.logo-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+    :root {
+      --bg: #060810;
+      --bg2: #0d1117;
+      --surface: #111827;
+      --border: #1f2937;
+      --accent: #f97316;
+      --green: #22c55e;
+      --red: #ef4444;
+      --blue: #3b82f6;
+      --text: #f1f5f9;
+      --muted: #64748b;
+      --card: #0f1623;
+    }
 
-/* SCREENS */
-.screen{display:none;min-height:calc(100vh - 65px);align-items:center;justify-content:center;padding:2rem;position:relative;z-index:1}
-.screen.active{display:flex}
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column
+    }
 
-/* SETUP SCREEN */
-.setup-container{width:100%;max-width:900px;display:grid;grid-template-columns:1fr 1.2fr;gap:3rem;align-items:start}
-.preview-section{}
-.preview-video-wrap{
-  border-radius:12px;overflow:hidden;background:#000;aspect-ratio:16/9;
-  border:1px solid var(--border);position:relative;margin-bottom:1rem;
-}
-#preview-video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
-.preview-placeholder{
-  width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5rem;color:var(--muted);font-size:.875rem;font-family:'DM Mono',monospace
-}
-.preview-controls-row{display:flex;gap:.75rem;justify-content:center}
-.pctrl{
-  padding:.5rem 1rem;border:1px solid var(--border);border-radius:6px;background:var(--card);
-  color:var(--text);font-family:'Syne',sans-serif;font-size:.8rem;font-weight:700;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:.4rem
-}
-.pctrl:hover{border-color:var(--accent)}
-.pctrl.off{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.4);color:var(--red)}
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse 80% 60% at 50% -20%, rgba(249, 115, 22, .1), transparent);
+      pointer-events: none
+    }
 
-.setup-form-section{}
-.form-title{font-size:2rem;font-weight:800;letter-spacing:-.03em;margin-bottom:.5rem}
-.form-sub{color:var(--muted);font-family:'DM Mono',monospace;font-size:.85rem;margin-bottom:2rem;line-height:1.5}
-.session-badge{
-  display:inline-flex;align-items:center;gap:.5rem;padding:.35rem 1rem;
-  border-radius:4px;border:1px solid rgba(249,115,22,.3);background:rgba(249,115,22,.08);
-  font-size:.8rem;font-weight:700;color:var(--accent);font-family:'DM Mono',monospace;
-  margin-bottom:1.5rem;letter-spacing:.1em;
-}
-.form-group{margin-bottom:1.25rem}
-.form-group label{display:block;font-size:.7rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.5rem}
-.form-group input,.form-group select{
-  width:100%;padding:.75rem 1rem;background:var(--bg2);border:1px solid var(--border);
-  border-radius:8px;color:var(--text);font-family:'Syne',sans-serif;font-size:.95rem;outline:none;transition:border-color .2s
-}
-.form-group input:focus,.form-group select:focus{border-color:var(--accent)}
-.join-btn{
-  width:100%;padding:.85rem;background:var(--accent);border:none;border-radius:8px;
-  color:#000;font-weight:800;font-size:1rem;cursor:pointer;font-family:'Syne',sans-serif;
-  transition:all .2s;margin-top:.5rem;
-}
-.join-btn:hover{background:#fb923c;transform:translateY(-1px)}
-.join-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
-.error-msg{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:6px;padding:.75rem;font-size:.8rem;color:var(--red);margin-top:.75rem;display:none;font-family:'DM Mono',monospace}
+    nav {
+      padding: 1.25rem 2.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      background: rgba(6, 8, 16, .9)
+    }
 
-/* WAITING ROOM */
-.waiting-container{text-align:center;max-width:480px}
-.waiting-anim{
-  width:80px;height:80px;border-radius:50%;border:2px solid var(--border);
-  border-top-color:var(--accent);margin:0 auto 2rem;animation:spin 1.5s linear infinite;
-}
-@keyframes spin{to{transform:rotate(360deg)}}
-.waiting-title{font-size:2rem;font-weight:800;letter-spacing:-.03em;margin-bottom:.75rem}
-.waiting-sub{color:var(--muted);font-family:'DM Mono',monospace;font-size:.9rem;margin-bottom:2rem;line-height:1.6}
-.waiting-status{
-  display:inline-flex;align-items:center;gap:.5rem;padding:.5rem 1.25rem;
-  border:1px solid var(--border);border-radius:20px;font-size:.8rem;font-weight:700;
-  font-family:'DM Mono',monospace;color:var(--muted);
-}
-.status-dot{width:8px;height:8px;border-radius:50%;background:#f59e0b;animation:pulse 1s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-.cancel-btn{
-  margin-top:2rem;padding:.6rem 1.5rem;background:transparent;border:1px solid var(--border);
-  border-radius:6px;color:var(--muted);font-family:'Syne',sans-serif;font-weight:700;font-size:.85rem;cursor:pointer;transition:all .2s
-}
-.cancel-btn:hover{border-color:var(--red);color:var(--red)}
+    .logo {
+      font-size: 1.1rem;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: .5rem
+    }
 
-/* STUDIO (guest in session) */
-.studio-screen{flex-direction:column;padding:0}
-.studio-topbar{
-  height:52px;background:var(--surface);border-bottom:1px solid var(--border);
-  display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;width:100%;
-}
-.rec-badge{display:flex;align-items:center;gap:.4rem;padding:.25rem .75rem;border-radius:4px;font-weight:700;font-size:.75rem}
-.rec-badge.recording{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3)}
-.rec-badge.idle{background:rgba(100,116,139,.15);color:var(--muted);border:1px solid var(--border)}
-.rec-dot{width:8px;height:8px;border-radius:50%;background:currentColor}
-.rec-badge.recording .rec-dot{animation:pulse 1s infinite}
+    .logo-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 12px var(--accent)
+    }
 
-.studio-workspace{flex:1;display:flex;overflow:hidden;width:100%}
-.studio-stage{flex:1;display:flex;align-items:center;justify-content:center;padding:1.5rem;background:var(--bg)}
-#guest-stage{border-radius:12px;overflow:hidden;background:#000;max-width:100%;aspect-ratio:16/9;width:100%;border:1px solid var(--border);box-shadow:0 20px 60px rgba(0,0,0,.5)}
-.guest-grid{display:grid;width:100%;height:100%;gap:2px;background:#111}
-.guest-grid.l1{grid-template-columns:1fr}
-.guest-grid.l2{grid-template-columns:1fr 1fr}
-.guest-grid.l3{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
-.guest-grid.l3 .video-tile:first-child{grid-column:span 2}
-.guest-grid.l4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
-.video-tile{position:relative;overflow:hidden;background:var(--card);display:flex;align-items:center;justify-content:center}
-.video-tile video{width:100%;height:100%;object-fit:cover}
-.tile-label{position:absolute;bottom:.5rem;left:.5rem;background:rgba(0,0,0,.75);border-radius:4px;padding:.2rem .6rem;font-size:.7rem;font-weight:700}
-.tile-avatar{width:64px;height:64px;border-radius:50%;border:2px solid var(--green);display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:800;background:var(--surface)}
+    /* SCREENS */
+    .screen {
+      display: none;
+      min-height: calc(100vh - 65px);
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      position: relative;
+      z-index: 1
+    }
 
-.guest-sidebar{width:240px;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
-.sidebar-title{padding:1rem;font-size:.75rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border)}
-.guest-list{flex:1;overflow-y:auto;padding:.75rem}
-.g-item{display:flex;align-items:center;gap:.5rem;padding:.5rem;border-radius:6px;font-size:.8rem;margin-bottom:.25rem}
-.g-av{width:28px;height:28px;border-radius:50%;background:var(--card);border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:800;flex-shrink:0}
-.chat-section{border-top:1px solid var(--border)}
-.chat-msgs{height:150px;overflow-y:auto;padding:.75rem;display:flex;flex-direction:column;gap:.35rem}
-.chat-m{font-size:.75rem;padding:.35rem .5rem;background:var(--card);border-radius:4px}
-.chat-m-name{font-weight:700;color:var(--accent);font-size:.7rem}
-.chat-inp-wrap{padding:.5rem;border-top:1px solid var(--border);display:flex;gap:.35rem}
-.chat-inp{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:.4rem .6rem;font-size:.75rem;font-family:'Syne',sans-serif;outline:none}
-.chat-inp:focus{border-color:var(--accent)}
-.chat-snd{padding:.4rem .6rem;background:var(--accent);border:none;border-radius:4px;color:#000;font-weight:700;cursor:pointer;font-size:.75rem}
+    .screen.active {
+      display: flex
+    }
 
-.studio-controls{height:72px;background:var(--surface);border-top:1px solid var(--border);display:flex;align-items:center;justify-content:center;gap:1rem;width:100%}
-.ctrl{width:48px;height:48px;border-radius:50%;border:1px solid var(--border);background:var(--card);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1.1rem;transition:all .2s}
-.ctrl:hover{border-color:var(--accent);background:rgba(249,115,22,.1)}
-.ctrl.off{background:rgba(239,68,68,.15);border-color:rgba(239,68,68,.5)}
-.ctrl-wrap{display:flex;flex-direction:column;align-items:center}
-.ctrl-label{font-size:.6rem;font-weight:700;text-transform:uppercase;color:var(--muted);margin-top:.25rem;text-align:center}
-.leave-btn{padding:.6rem 1.5rem;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);border-radius:6px;color:var(--red);font-weight:700;font-size:.8rem;cursor:pointer;font-family:'Syne',sans-serif;transition:all .2s}
-.leave-btn:hover{background:rgba(239,68,68,.3)}
-.rec-label{font-size:.75rem;font-family:'DM Mono',monospace;color:var(--red);font-weight:700;padding:.35rem .75rem;background:rgba(239,68,68,.1);border-radius:4px;display:none}
-.rec-label.show{display:block}
+    /* SETUP SCREEN */
+    .setup-container {
+      width: 100%;
+      max-width: 900px;
+      display: grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 3rem;
+      align-items: start
+    }
 
-/* Kicked */
-.kicked-screen{text-align:center;max-width:400px}
-.kicked-icon{font-size:4rem;margin-bottom:1rem}
-.kicked-title{font-size:2rem;font-weight:800;margin-bottom:.5rem}
-.kicked-sub{color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:2rem;font-size:.9rem}
-.home-btn{padding:.75rem 2rem;background:var(--accent);border:none;border-radius:8px;color:#000;font-weight:800;font-size:.95rem;cursor:pointer;font-family:'Syne',sans-serif}
+    .preview-video-wrap {
+      border-radius: 12px;
+      overflow: hidden;
+      background: #000;
+      aspect-ratio: 16/9;
+      border: 1px solid var(--border);
+      position: relative;
+      margin-bottom: 1rem;
+    }
 
-::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-</style>
+    #preview-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1)
+    }
+
+    .preview-placeholder {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: .5rem;
+      color: var(--muted);
+      font-size: .875rem;
+      font-family: 'DM Mono', monospace
+    }
+
+    .preview-controls-row {
+      display: flex;
+      gap: .75rem;
+      justify-content: center
+    }
+
+    .pctrl {
+      padding: .5rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--card);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      font-size: .8rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all .2s;
+      display: flex;
+      align-items: center;
+      gap: .4rem
+    }
+
+    .pctrl:hover {
+      border-color: var(--accent)
+    }
+
+    .pctrl.off {
+      background: rgba(239, 68, 68, .1);
+      border-color: rgba(239, 68, 68, .4);
+      color: var(--red)
+    }
+
+    .form-title {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -.03em;
+      margin-bottom: .5rem
+    }
+
+    .form-sub {
+      color: var(--muted);
+      font-family: 'DM Mono', monospace;
+      font-size: .85rem;
+      margin-bottom: 2rem;
+      line-height: 1.5
+    }
+
+    .session-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .35rem 1rem;
+      border-radius: 4px;
+      border: 1px solid rgba(249, 115, 22, .3);
+      background: rgba(249, 115, 22, .08);
+      font-size: .8rem;
+      font-weight: 700;
+      color: var(--accent);
+      font-family: 'DM Mono', monospace;
+      margin-bottom: 1.5rem;
+      letter-spacing: .1em;
+    }
+
+    .form-group {
+      margin-bottom: 1.25rem
+    }
+
+    .form-group label {
+      display: block;
+      font-size: .7rem;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: .5rem
+    }
+
+    .form-group input,
+    .form-group select {
+      width: 100%;
+      padding: .75rem 1rem;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      font-size: .95rem;
+      outline: none;
+      transition: border-color .2s
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+      border-color: var(--accent)
+    }
+
+    .join-btn {
+      width: 100%;
+      padding: .85rem;
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      color: #000;
+      font-weight: 800;
+      font-size: 1rem;
+      cursor: pointer;
+      font-family: 'Syne', sans-serif;
+      transition: all .2s;
+      margin-top: .5rem;
+    }
+
+    .join-btn:hover {
+      background: #fb923c;
+      transform: translateY(-1px)
+    }
+
+    .join-btn:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+      transform: none
+    }
+
+    .error-msg {
+      background: rgba(239, 68, 68, .1);
+      border: 1px solid rgba(239, 68, 68, .3);
+      border-radius: 6px;
+      padding: .75rem;
+      font-size: .8rem;
+      color: var(--red);
+      margin-top: .75rem;
+      display: none;
+      font-family: 'DM Mono', monospace
+    }
+
+    /* WAITING ROOM */
+    .waiting-container {
+      text-align: center;
+      max-width: 480px
+    }
+
+    .waiting-anim {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      margin: 0 auto 2rem;
+      animation: spin 1.5s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg)
+      }
+    }
+
+    .waiting-title {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -.03em;
+      margin-bottom: .75rem
+    }
+
+    .waiting-sub {
+      color: var(--muted);
+      font-family: 'DM Mono', monospace;
+      font-size: .9rem;
+      margin-bottom: 2rem;
+      line-height: 1.6
+    }
+
+    .waiting-status {
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .5rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: .8rem;
+      font-weight: 700;
+      font-family: 'DM Mono', monospace;
+      color: var(--muted);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #f59e0b;
+      animation: pulse 1s infinite
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: .3
+      }
+    }
+
+    .cancel-btn {
+      margin-top: 2rem;
+      padding: .6rem 1.5rem;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: .85rem;
+      cursor: pointer;
+      transition: all .2s
+    }
+
+    .cancel-btn:hover {
+      border-color: var(--red);
+      color: var(--red)
+    }
+
+    /* STUDIO (guest in session) */
+    .studio-screen {
+      flex-direction: column;
+      padding: 0
+    }
+
+    .studio-topbar {
+      height: 52px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1.5rem;
+      width: 100%;
+    }
+
+    .rec-badge {
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      padding: .25rem .75rem;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: .75rem
+    }
+
+    .rec-badge.recording {
+      background: rgba(239, 68, 68, .15);
+      color: var(--red);
+      border: 1px solid rgba(239, 68, 68, .3)
+    }
+
+    .rec-badge.idle {
+      background: rgba(100, 116, 139, .15);
+      color: var(--muted);
+      border: 1px solid var(--border)
+    }
+
+    .rec-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor
+    }
+
+    .rec-badge.recording .rec-dot {
+      animation: pulse 1s infinite
+    }
+
+    .studio-workspace {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      width: 100%
+    }
+
+    .studio-stage {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5rem;
+      background: var(--bg)
+    }
+
+    #guest-stage {
+      border-radius: 12px;
+      overflow: hidden;
+      background: #000;
+      max-width: 100%;
+      aspect-ratio: 16/9;
+      width: 100%;
+      border: 1px solid var(--border);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, .5)
+    }
+
+    .guest-grid {
+      display: grid;
+      width: 100%;
+      height: 100%;
+      gap: 2px;
+      background: #111
+    }
+
+    .guest-grid.l1 {
+      grid-template-columns: 1fr
+    }
+
+    .guest-grid.l2 {
+      grid-template-columns: 1fr 1fr
+    }
+
+    .guest-grid.l3 {
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr
+    }
+
+    .guest-grid.l3 .video-tile:first-child {
+      grid-column: span 2
+    }
+
+    .guest-grid.l4 {
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr
+    }
+
+    .video-tile {
+      position: relative;
+      overflow: hidden;
+      background: var(--card);
+      display: flex;
+      align-items: center;
+      justify-content: center
+    }
+
+    .video-tile video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover
+    }
+
+    .tile-label {
+      position: absolute;
+      bottom: .5rem;
+      left: .5rem;
+      background: rgba(0, 0, 0, .75);
+      border-radius: 4px;
+      padding: .2rem .6rem;
+      font-size: .7rem;
+      font-weight: 700
+    }
+
+    .tile-avatar {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      border: 2px solid var(--green);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      font-weight: 800;
+      background: var(--surface)
+    }
+
+    .guest-sidebar {
+      width: 240px;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden
+    }
+
+    .sidebar-title {
+      padding: 1rem;
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border)
+    }
+
+    .guest-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: .75rem
+    }
+
+    .g-item {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .5rem;
+      border-radius: 6px;
+      font-size: .8rem;
+      margin-bottom: .25rem
+    }
+
+    .g-av {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--card);
+      border: 1px solid var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: .7rem;
+      font-weight: 800;
+      flex-shrink: 0
+    }
+
+    .chat-section {
+      border-top: 1px solid var(--border)
+    }
+
+    .chat-msgs {
+      height: 150px;
+      overflow-y: auto;
+      padding: .75rem;
+      display: flex;
+      flex-direction: column;
+      gap: .35rem
+    }
+
+    .chat-m {
+      font-size: .75rem;
+      padding: .35rem .5rem;
+      background: var(--card);
+      border-radius: 4px
+    }
+
+    .chat-m-name {
+      font-weight: 700;
+      color: var(--accent);
+      font-size: .7rem
+    }
+
+    .chat-inp-wrap {
+      padding: .5rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: .35rem
+    }
+
+    .chat-inp {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      padding: .4rem .6rem;
+      font-size: .75rem;
+      font-family: 'Syne', sans-serif;
+      outline: none
+    }
+
+    .chat-inp:focus {
+      border-color: var(--accent)
+    }
+
+    .chat-snd {
+      padding: .4rem .6rem;
+      background: var(--accent);
+      border: none;
+      border-radius: 4px;
+      color: #000;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: .75rem
+    }
+
+    .studio-controls {
+      height: 72px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      width: 100%
+    }
+
+    .ctrl {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--card);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1.1rem;
+      transition: all .2s
+    }
+
+    .ctrl:hover {
+      border-color: var(--accent);
+      background: rgba(249, 115, 22, .1)
+    }
+
+    .ctrl.off {
+      background: rgba(239, 68, 68, .15);
+      border-color: rgba(239, 68, 68, .5)
+    }
+
+    .ctrl-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center
+    }
+
+    .ctrl-label {
+      font-size: .6rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-top: .25rem;
+      text-align: center
+    }
+
+    .leave-btn {
+      padding: .6rem 1.5rem;
+      background: rgba(239, 68, 68, .15);
+      border: 1px solid rgba(239, 68, 68, .4);
+      border-radius: 6px;
+      color: var(--red);
+      font-weight: 700;
+      font-size: .8rem;
+      cursor: pointer;
+      font-family: 'Syne', sans-serif;
+      transition: all .2s
+    }
+
+    .leave-btn:hover {
+      background: rgba(239, 68, 68, .3)
+    }
+
+    .rec-label {
+      font-size: .75rem;
+      font-family: 'DM Mono', monospace;
+      color: var(--red);
+      font-weight: 700;
+      padding: .35rem .75rem;
+      background: rgba(239, 68, 68, .1);
+      border-radius: 4px;
+      display: none
+    }
+
+    .rec-label.show {
+      display: block
+    }
+
+    /* Kicked */
+    .kicked-screen {
+      text-align: center;
+      max-width: 400px
+    }
+
+    .kicked-icon {
+      font-size: 4rem;
+      margin-bottom: 1rem
+    }
+
+    .kicked-title {
+      font-size: 2rem;
+      font-weight: 800;
+      margin-bottom: .5rem
+    }
+
+    .kicked-sub {
+      color: var(--muted);
+      font-family: 'DM Mono', monospace;
+      margin-bottom: 2rem;
+      font-size: .9rem
+    }
+
+    .home-btn {
+      padding: .75rem 2rem;
+      background: var(--accent);
+      border: none;
+      border-radius: 8px;
+      color: #000;
+      font-weight: 800;
+      font-size: .95rem;
+      cursor: pointer;
+      font-family: 'Syne', sans-serif
+    }
+
+    ::-webkit-scrollbar {
+      width: 4px
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 2px
+    }
+  </style>
 </head>
+
 <body>
 
-<nav>
-  <div class="logo"><div class="logo-dot"></div>PodcastStudio</div>
-  <span style="font-size:.8rem;color:var(--muted);font-family:'DM Mono',monospace" id="nav-session-id"></span>
-</nav>
+  <nav>
+    <div class="logo">
+      <div class="logo-dot"></div>PodcastStudio
+    </div>
+    <span style="font-size:.8rem;color:var(--muted);font-family:'DM Mono',monospace" id="nav-session-id"></span>
+  </nav>
 
-<!-- SETUP SCREEN -->
-<div class="screen active" id="screen-setup">
-  <div class="setup-container">
-    <div class="preview-section">
-      <div class="preview-video-wrap">
-        <video id="preview-video" autoplay playsinline muted></video>
-        <div class="preview-placeholder" id="preview-placeholder">
-          <span style="font-size:2rem">📷</span>
-          <span>Camera preview will appear here</span>
+  <!-- SETUP SCREEN -->
+  <div class="screen active" id="screen-setup">
+    <div class="setup-container">
+      <div class="preview-section">
+        <div class="preview-video-wrap">
+          <video id="preview-video" autoplay playsinline muted></video>
+          <div class="preview-placeholder" id="preview-placeholder">
+            <span style="font-size:2rem">📷</span>
+            <span>Camera preview will appear here</span>
+          </div>
+        </div>
+        <div class="preview-controls-row">
+          <button class="pctrl" id="btn-mic" onclick="toggleSetupMic()">🎤 Mic On</button>
+          <button class="pctrl" id="btn-cam" onclick="toggleSetupCam()">📷 Cam On</button>
+          <button class="pctrl" onclick="testDevices()">⚙️ Devices</button>
         </div>
       </div>
-      <div class="preview-controls-row">
-        <button class="pctrl" id="btn-mic" onclick="toggleSetupMic()">🎤 Mic On</button>
-        <button class="pctrl" id="btn-cam" onclick="toggleSetupCam()">📷 Cam On</button>
-        <button class="pctrl" onclick="testDevices()">⚙️ Devices</button>
+      <div class="setup-form-section">
+        <div class="form-title">Join Session</div>
+        <p class="form-sub">Check your mic and camera, then enter the studio.<br />No account needed.</p>
+        <div class="session-badge" id="session-badge-display">Session: —</div>
+        <div class="form-group">
+          <label>Your Name</label>
+          <input type="text" id="guest-name-input" placeholder="e.g ayush Mehta" maxlength="40" />
+        </div>
+        <div class="form-group">
+          <label>Microphone</label>
+          <select id="mic-select"></select>
+        </div>
+        <div class="form-group">
+          <label>Camera</label>
+          <select id="cam-select"></select>
+        </div>
+        <button class="join-btn" id="join-btn" onclick="enterWaitingRoom()">Enter Studio →</button>
+        <div class="error-msg" id="setup-error"></div>
       </div>
-    </div>
-    <div class="setup-form-section">
-      <div class="form-title">Join Session</div>
-      <p class="form-sub">Check your mic and camera, then enter the studio.<br/>No account needed.</p>
-      <div class="session-badge" id="session-badge-display">Session: —</div>
-      <div class="form-group">
-        <label>Your Name</label>
-        <input type="text" id="guest-name-input" placeholder="e.g ayush Mehta" maxlength="40"/>
-      </div>
-      <div class="form-group">
-        <label>Microphone</label>
-        <select id="mic-select"></select>
-      </div>
-      <div class="form-group">
-        <label>Camera</label>
-        <select id="cam-select"></select>
-      </div>
-      <button class="join-btn" id="join-btn" onclick="enterWaitingRoom()">Enter Studio →</button>
-      <div class="error-msg" id="setup-error"></div>
     </div>
   </div>
-</div>
 
-<!-- WAITING ROOM SCREEN -->
-<div class="screen" id="screen-waiting">
-  <div class="waiting-container">
-    <div class="waiting-anim"></div>
-    <div class="waiting-title">You're in the Lobby</div>
-    <p class="waiting-sub">The host will admit you shortly.<br/>Your mic and camera will activate when you're let in.</p>
-    <div class="waiting-status">
-      <div class="status-dot"></div>
-      <span>Waiting for host approval...</span>
+  <!-- WAITING ROOM SCREEN -->
+  <div class="screen" id="screen-waiting">
+    <div class="waiting-container">
+      <div class="waiting-anim"></div>
+      <div class="waiting-title">You're in the Lobby</div>
+      <p class="waiting-sub">The host will admit you shortly.<br />Your mic and camera will activate when you're let in.
+      </p>
+      <div class="waiting-status">
+        <div class="status-dot"></div>
+        <span>Waiting for host approval...</span>
+      </div>
+      <button class="cancel-btn" onclick="cancelWait()">✕ Cancel</button>
     </div>
-    <button class="cancel-btn" onclick="cancelWait()">✕ Cancel</button>
   </div>
-</div>
 
-<!-- STUDIO SCREEN (guest) -->
-<div class="screen studio-screen" id="screen-studio">
-  <div class="studio-topbar">
-    <div class="logo"><div class="logo-dot"></div>PodcastStudio</div>
-    <div style="display:flex;align-items:center;gap:1rem">
-      <div class="rec-badge idle" id="guest-rec-badge">
-        <div class="rec-dot"></div>
-        <span id="guest-rec-text">LIVE</span>
+  <!-- STUDIO SCREEN (guest) -->
+  <div class="screen studio-screen" id="screen-studio">
+    <div class="studio-topbar">
+      <div class="logo">
+        <div class="logo-dot"></div>PodcastStudio
       </div>
-      <div id="guest-timer" style="font-family:'DM Mono',monospace;font-size:.9rem;color:var(--red);font-weight:500"></div>
-    </div>
-    <span style="font-size:.8rem;font-weight:700" id="guest-name-display">—</span>
-  </div>
-  <div class="studio-workspace">
-    <div class="studio-stage">
-      <div id="guest-stage">
-        <div class="guest-grid l1" id="guest-grid"></div>
+      <div style="display:flex;align-items:center;gap:1rem">
+        <div class="rec-badge idle" id="guest-rec-badge">
+          <div class="rec-dot"></div>
+          <span id="guest-rec-text">LIVE</span>
+        </div>
+        <div id="guest-timer" style="font-family:'DM Mono',monospace;font-size:.9rem;color:var(--red);font-weight:500">
+        </div>
       </div>
+      <span style="font-size:.8rem;font-weight:700" id="guest-name-display">—</span>
     </div>
-    <div class="guest-sidebar">
-      <div class="sidebar-title">Participants</div>
-      <div class="guest-list" id="guest-participant-list"></div>
-      <div class="chat-section">
-        <div class="sidebar-title" style="border-top:1px solid var(--border)">Chat</div>
-        <div class="chat-msgs" id="guest-chat-msgs"></div>
-        <div class="chat-inp-wrap">
-          <input type="text" class="chat-inp" id="guest-chat-input" placeholder="Message..." maxlength="200"/>
-          <button class="chat-snd" onclick="guestSendChat()">→</button>
+    <div class="studio-workspace">
+      <div class="studio-stage">
+        <div id="guest-stage">
+          <div class="guest-grid l1" id="guest-grid"></div>
+        </div>
+      </div>
+      <div class="guest-sidebar">
+        <div class="sidebar-title">Participants</div>
+        <div class="guest-list" id="guest-participant-list"></div>
+        <div class="chat-section">
+          <div class="sidebar-title" style="border-top:1px solid var(--border)">Chat</div>
+          <div class="chat-msgs" id="guest-chat-msgs"></div>
+          <div class="chat-inp-wrap">
+            <input type="text" class="chat-inp" id="guest-chat-input" placeholder="Message..." maxlength="200" />
+            <button class="chat-snd" onclick="guestSendChat()">→</button>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-  <div class="studio-controls">
-    <div class="ctrl-wrap">
-      <div class="ctrl" id="g-ctrl-mic" onclick="guestToggleMic()">🎤</div>
-      <div class="ctrl-label">Mic</div>
+    <div class="studio-controls">
+      <div class="ctrl-wrap">
+        <div class="ctrl" id="g-ctrl-mic" onclick="guestToggleMic()">🎤</div>
+        <div class="ctrl-label">Mic</div>
+      </div>
+      <div class="ctrl-wrap">
+        <div class="ctrl" id="g-ctrl-cam" onclick="guestToggleCam()">📷</div>
+        <div class="ctrl-label">Camera</div>
+      </div>
+      <div class="rec-label" id="guest-rec-label">🔴 REC</div>
+      <button class="leave-btn" onclick="guestLeave()">Leave</button>
     </div>
-    <div class="ctrl-wrap">
-      <div class="ctrl" id="g-ctrl-cam" onclick="guestToggleCam()">📷</div>
-      <div class="ctrl-label">Camera</div>
+  </div>
+
+  <!-- KICKED SCREEN -->
+  <div class="screen" id="screen-kicked">
+    <div class="kicked-screen">
+      <div class="kicked-icon">🚪</div>
+      <div class="kicked-title">You've been removed</div>
+      <p class="kicked-sub">The host has ended your participation in this session.</p>
+      <button class="home-btn" onclick="window.location.href='/'">Go Home</button>
     </div>
-    <div class="rec-label" id="guest-rec-label">🔴 REC</div>
-    <button class="leave-btn" onclick="guestLeave()">Leave</button>
   </div>
-</div>
 
-<!-- KICKED SCREEN -->
-<div class="screen" id="screen-kicked">
-  <div class="kicked-screen">
-    <div class="kicked-icon">🚪</div>
-    <div class="kicked-title">You've been removed</div>
-    <p class="kicked-sub">The host has ended your participation in this session.</p>
-    <button class="home-btn" onclick="window.location.href='/'">Go Home</button>
-  </div>
-</div>
+  <script>
+    const sessionId = window.location.pathname.split('/').pop();
+    const urlParams = new URLSearchParams(window.location.search);
+    let myName = urlParams.get('name') || localStorage.getItem('myName') || '';
+    let socket;
+    let myStream = null;
+    let setupMicOn = true, setupCamOn = true;
+    let guestMicOn = true, guestCamOn = true;
+    let peers = {}, remoteStreams = {};
+    let participantNames = {};
+    let isRecording = false;
+    let timerInterval = null, timerSecs = 0;
+    let recordingChunks = {};
+    let peerRecorders = {};
+    let mySocketId = null;
 
-<script>
-const sessionId = window.location.pathname.split('/').pop();
-const urlParams = new URLSearchParams(window.location.search);
-let myName = urlParams.get('name') || localStorage.getItem('myName') || '';
-let socket;
-let myStream = null;
-let setupMicOn = true, setupCamOn = true;
-let guestMicOn = true, guestCamOn = true;
-let peers = {}, remoteStreams = {};
-let participantNames = {};
-let isRecording = false;
-let timerInterval = null, timerSecs = 0;
-let recordingChunks = {};
-let peerRecorders = {};
-let mySocketId = null;
+    const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+    // Init
+    document.getElementById('nav-session-id').textContent = `Session: ${sessionId}`;
+    document.getElementById('session-badge-display').textContent = `Session: ${sessionId}`;
+    if (myName) document.getElementById('guest-name-input').value = myName;
 
-// Init
-document.getElementById('nav-session-id').textContent = `Session: ${sessionId}`;
-document.getElementById('session-badge-display').textContent = `Session: ${sessionId}`;
-if (myName) document.getElementById('guest-name-input').value = myName;
-
-async function initDevices() {
-  try {
-    myStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    const vid = document.getElementById('preview-video');
-    vid.srcObject = myStream;
-    document.getElementById('preview-placeholder').style.display = 'none';
-    await loadDeviceSelects();
-  } catch(e) {
-    document.getElementById('preview-placeholder').style.display = 'flex';
-    console.warn('Device access error:', e);
-  }
-}
-
-async function loadDeviceSelects() {
-  const devices = await navigator.mediaDevices.enumerateDevices();
-  const micSel = document.getElementById('mic-select');
-  const camSel = document.getElementById('cam-select');
-  micSel.innerHTML = '';
-  camSel.innerHTML = '';
-  devices.filter(d => d.kind === 'audioinput').forEach(d => {
-    const opt = document.createElement('option');
-    opt.value = d.deviceId;
-    opt.textContent = d.label || `Microphone ${micSel.length + 1}`;
-    micSel.appendChild(opt);
-  });
-  devices.filter(d => d.kind === 'videoinput').forEach(d => {
-    const opt = document.createElement('option');
-    opt.value = d.deviceId;
-    opt.textContent = d.label || `Camera ${camSel.length + 1}`;
-    camSel.appendChild(opt);
-  });
-}
-
-function toggleSetupMic() {
-  setupMicOn = !setupMicOn;
-  if (myStream) myStream.getAudioTracks().forEach(t => t.enabled = setupMicOn);
-  const btn = document.getElementById('btn-mic');
-  btn.textContent = setupMicOn ? '🎤 Mic On' : '🔇 Mic Off';
-  btn.classList.toggle('off', !setupMicOn);
-}
-
-function toggleSetupCam() {
-  setupCamOn = !setupCamOn;
-  if (myStream) myStream.getVideoTracks().forEach(t => t.enabled = setupCamOn);
-  const btn = document.getElementById('btn-cam');
-  btn.textContent = setupCamOn ? '📷 Cam On' : '🚫 Cam Off';
-  btn.classList.toggle('off', !setupCamOn);
-}
-
-function testDevices() {
-  initDevices();
-}
-
-async function enterWaitingRoom() {
-  myName = document.getElementById('guest-name-input').value.trim();
-  if (!myName) {
-    showError('Please enter your name.');
-    return;
-  }
-  localStorage.setItem('myName', myName);
-  document.getElementById('guest-name-display').textContent = myName;
-
-  showScreen('waiting');
-  initSocket();
-}
-
-function initSocket() {
-  socket = io();
-  mySocketId = null;
-
-  socket.on('connect', () => {
-    mySocketId = socket.id;
-    socket.emit('guest:join', { sessionId, name: myName });
-  });
-
-  socket.on('guest:waiting', ({ participantId }) => {
-    mySocketId = participantId || socket.id;
-  });
-
-  socket.on('guest:admitted', () => {
-    showScreen('studio');
-    addMyVideoTile();
-    socket.emit('webrtc:ready', {});
-  });
-
-  socket.on('guest:kicked', () => {
-    stopAllRecorders();
-    showScreen('kicked');
-    socket.disconnect();
-  });
-
-  socket.on('host:left', () => {
-    alert('The host has ended the session.');
-    guestLeave();
-  });
-
-  socket.on('participants:update', ({ participants }) => {
-    participantNames = {};
-    Object.values(participants).forEach(p => { participantNames[p.socketId] = p.name; });
-    updateGuestParticipantList(participants);
-  });
-
-  socket.on('participant:left', ({ socketId, name }) => {
-    removeGuestTile(socketId);
-    closePeer(socketId);
-  });
-
-  socket.on('webrtc:offer-needed', async ({ targetId, targetName }) => {
-    if (targetId === socket.id) return;
-    participantNames[targetId] = targetName || 'Guest';
-    const pc = createPeer(targetId);
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    socket.emit('webrtc:offer', { targetId, offer });
-  });
-
-  socket.on('webrtc:offer', async ({ fromId, fromName, offer }) => {
-    participantNames[fromId] = fromName || 'Guest';
-    const pc = createPeer(fromId);
-    await pc.setRemoteDescription(offer);
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    socket.emit('webrtc:answer', { targetId: fromId, answer });
-  });
-
-  socket.on('webrtc:answer', async ({ fromId, answer }) => {
-    const pc = peers[fromId];
-    if (pc) await pc.setRemoteDescription(answer);
-  });
-
-  socket.on('webrtc:ice', async ({ fromId, candidate }) => {
-    const pc = peers[fromId];
-    if (pc && candidate) { try { await pc.addIceCandidate(candidate); } catch(e) {} }
-  });
-
-  socket.on('recording:start', () => {
-    isRecording = true;
-    document.getElementById('guest-rec-badge').className = 'rec-badge recording';
-    document.getElementById('guest-rec-text').textContent = 'REC';
-    document.getElementById('guest-rec-label').classList.add('show');
-    startTimer();
-    // Record own stream
-    if (myStream) startRecording('self', myName, myStream);
-    // Record peer streams
-    Object.entries(remoteStreams).forEach(([id, s]) => startRecording(id, participantNames[id] || 'Guest', s));
-  });
-
-  socket.on('recording:stop', () => {
-    isRecording = false;
-    document.getElementById('guest-rec-badge').className = 'rec-badge idle';
-    document.getElementById('guest-rec-text').textContent = 'LIVE';
-    document.getElementById('guest-rec-label').classList.remove('show');
-    stopTimer();
-    stopAllRecorders();
-  });
-
-  socket.on('layout:change', ({ layout }) => updateGuestLayout(layout));
-
-  socket.on('force:mute', ({ muted }) => {
-    if (muted && myStream) {
-      myStream.getAudioTracks().forEach(t => t.enabled = false);
-      guestMicOn = false;
-      document.getElementById('g-ctrl-mic').textContent = '🔇';
-      document.getElementById('g-ctrl-mic').classList.add('off');
+    async function initDevices() {
+      try {
+        myStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        const vid = document.getElementById('preview-video');
+        vid.srcObject = myStream;
+        document.getElementById('preview-placeholder').style.display = 'none';
+        await loadDeviceSelects();
+      } catch (e) {
+        document.getElementById('preview-placeholder').style.display = 'flex';
+        console.warn('Device access error:', e);
+      }
     }
-  });
 
-  socket.on('chat:message', ({ name, message, time }) => {
-    const msgs = document.getElementById('guest-chat-msgs');
-    const div = document.createElement('div');
-    div.className = 'chat-m';
-    div.innerHTML = `<div class="chat-m-name">${name}</div><div style="word-break:break-word">${message}</div>`;
-    msgs.appendChild(div);
-    msgs.scrollTop = msgs.scrollHeight;
-  });
-
-  socket.on('error', ({ message }) => {
-    showError(message);
-    showScreen('setup');
-  });
-}
-
-function createPeer(peerId) {
-  if (peers[peerId]) peers[peerId].close();
-  const pc = new RTCPeerConnection(ICE);
-  peers[peerId] = pc;
-  if (myStream) myStream.getTracks().forEach(t => pc.addTrack(t, myStream));
-  pc.onicecandidate = ({ candidate }) => {
-    if (candidate) socket.emit('webrtc:ice', { targetId: peerId, candidate });
-  };
-  pc.ontrack = ({ streams }) => {
-    if (streams && streams[0]) {
-      remoteStreams[peerId] = streams[0];
-      addGuestVideoTile(peerId, participantNames[peerId] || 'Guest', streams[0]);
+    async function loadDeviceSelects() {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const micSel = document.getElementById('mic-select');
+      const camSel = document.getElementById('cam-select');
+      micSel.innerHTML = '';
+      camSel.innerHTML = '';
+      devices.filter(d => d.kind === 'audioinput').forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.deviceId;
+        opt.textContent = d.label || `Microphone ${micSel.length + 1}`;
+        micSel.appendChild(opt);
+      });
+      devices.filter(d => d.kind === 'videoinput').forEach(d => {
+        const opt = document.createElement('option');
+        opt.value = d.deviceId;
+        opt.textContent = d.label || `Camera ${camSel.length + 1}`;
+        camSel.appendChild(opt);
+      });
     }
-  };
-  return pc;
-}
 
-function closePeer(id) {
-  if (peers[id]) { peers[id].close(); delete peers[id]; }
-  delete remoteStreams[id];
-  removeGuestTile(id);
-}
-
-function addMyVideoTile() {
-  if (!myStream) return;
-  addGuestVideoTile('self', myName, myStream, true);
-}
-
-function addGuestVideoTile(id, name, stream, mirror) {
-  const grid = document.getElementById('guest-grid');
-  let tile = document.getElementById(`gt-${id}`);
-  if (!tile) { tile = document.createElement('div'); tile.className = 'video-tile'; tile.id = `gt-${id}`; grid.appendChild(tile); }
-  tile.innerHTML = '';
-  if (stream && stream.getVideoTracks().length > 0) {
-    const vid = document.createElement('video');
-    vid.autoplay = true; vid.playsInline = true;
-    if (mirror) vid.style.transform = 'scaleX(-1)';
-    if (id === 'self') vid.muted = true;
-    vid.srcObject = stream;
-    tile.appendChild(vid);
-  } else {
-    const av = document.createElement('div');
-    av.className = 'tile-avatar';
-    av.textContent = name.charAt(0).toUpperCase();
-    tile.appendChild(av);
-  }
-  const lbl = document.createElement('div');
-  lbl.className = 'tile-label';
-  lbl.textContent = name + (id === 'self' ? ' (you)' : '');
-  tile.appendChild(lbl);
-  autoUpdateLayout();
-}
-
-function removeGuestTile(id) {
-  document.getElementById(`gt-${id}`)?.remove();
-  autoUpdateLayout();
-}
-
-function autoUpdateLayout() {
-  const grid = document.getElementById('guest-grid');
-  const count = grid.children.length;
-  grid.className = 'guest-grid ' + (count <= 1 ? 'l1' : count === 2 ? 'l2' : count === 3 ? 'l3' : 'l4');
-}
-
-function updateGuestLayout(layout) {
-  const grid = document.getElementById('guest-grid');
-  const map = { solo: 'l1', side: 'l2', spotlight: 'l3', grid: 'l4' };
-  grid.className = 'guest-grid ' + (map[layout] || 'l1');
-}
-
-function updateGuestParticipantList(participants) {
-  const list = document.getElementById('guest-participant-list');
-  list.innerHTML = '';
-  Object.values(participants).forEach(p => {
-    const item = document.createElement('div');
-    item.className = 'g-item';
-    item.innerHTML = `<div class="g-av">${p.name.charAt(0).toUpperCase()}</div><span style="font-size:.8rem;font-weight:700">${p.name}${p.role==='host'?' <span style="color:var(--accent);font-size:.65rem">HOST</span>':''}</span>`;
-    list.appendChild(item);
-  });
-}
-
-function startRecording(id, name, stream) {
-  if (!stream) return;
-  try {
-    const mr = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: 2500000 });
-    recordingChunks[id] = [];
-    mr.ondataavailable = e => { if (e.data.size > 0) recordingChunks[id].push(e.data); };
-    mr.start(1000);
-    peerRecorders[id] = mr;
-  } catch(e) { console.error('Guest recorder error:', e); }
-}
-
-async function stopAllRecorders() {
-  for (const [id, mr] of Object.entries(peerRecorders)) {
-    if (mr.state !== 'inactive') {
-      mr.stop();
-      await new Promise(r => mr.onstop = r);
+    function toggleSetupMic() {
+      setupMicOn = !setupMicOn;
+      if (myStream) myStream.getAudioTracks().forEach(t => t.enabled = setupMicOn);
+      const btn = document.getElementById('btn-mic');
+      btn.textContent = setupMicOn ? '🎤 Mic On' : '🔇 Mic Off';
+      btn.classList.toggle('off', !setupMicOn);
     }
-    const blob = new Blob(recordingChunks[id] || [], { type: 'video/webm' });
-    if (blob.size > 0) {
-      const name = id === 'self' ? myName : (participantNames[id] || 'Guest');
-      downloadBlob(blob, `${name.replace(/\s+/g,'_')}_${sessionId}.webm`);
-      // Upload to server
-      const fd = new FormData();
-      fd.append('recording', blob); fd.append('sessionId', sessionId);
-      fd.append('participantId', mySocketId || 'guest'); fd.append('participantName', name); fd.append('type', 'individual');
-      fetch('/api/recordings/upload', { method: 'POST', body: fd }).catch(() => {});
+
+    function toggleSetupCam() {
+      setupCamOn = !setupCamOn;
+      if (myStream) myStream.getVideoTracks().forEach(t => t.enabled = setupCamOn);
+      const btn = document.getElementById('btn-cam');
+      btn.textContent = setupCamOn ? '📷 Cam On' : '🚫 Cam Off';
+      btn.classList.toggle('off', !setupCamOn);
     }
-  }
-  peerRecorders = {}; recordingChunks = {};
-}
 
-function downloadBlob(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
-}
+    function testDevices() {
+      initDevices();
+    }
 
-function startTimer() {
-  timerSecs = 0;
-  timerInterval = setInterval(() => {
-    timerSecs++;
-    const m = String(Math.floor(timerSecs/60)).padStart(2,'0');
-    const s = String(timerSecs%60).padStart(2,'0');
-    document.getElementById('guest-timer').textContent = `${m}:${s}`;
-  }, 1000);
-}
-function stopTimer() { clearInterval(timerInterval); document.getElementById('guest-timer').textContent = ''; }
+    async function enterWaitingRoom() {
+      myName = document.getElementById('guest-name-input').value.trim();
+      if (!myName) {
+        showError('Please enter your name.');
+        return;
+      }
+      localStorage.setItem('myName', myName);
+      document.getElementById('guest-name-display').textContent = myName;
 
-function guestToggleMic() {
-  if (!myStream) return;
-  guestMicOn = !guestMicOn;
-  myStream.getAudioTracks().forEach(t => t.enabled = guestMicOn);
-  const ctrl = document.getElementById('g-ctrl-mic');
-  ctrl.textContent = guestMicOn ? '🎤' : '🔇';
-  ctrl.classList.toggle('off', !guestMicOn);
-}
+      showScreen('waiting');
+      initSocket();
+    }
 
-function guestToggleCam() {
-  if (!myStream) return;
-  guestCamOn = !guestCamOn;
-  myStream.getVideoTracks().forEach(t => t.enabled = guestCamOn);
-  const ctrl = document.getElementById('g-ctrl-cam');
-  ctrl.textContent = guestCamOn ? '📷' : '🚫';
-  ctrl.classList.toggle('off', !guestCamOn);
-}
+    function initSocket() {
+      socket = io();
+      mySocketId = null;
 
-function guestSendChat() {
-  const inp = document.getElementById('guest-chat-input');
-  const msg = inp.value.trim();
-  if (!msg) return;
-  socket.emit('chat:message', { message: msg });
-  inp.value = '';
-}
+      socket.on('connect', () => {
+        mySocketId = socket.id;
+        socket.emit('guest:join', { sessionId, name: myName });
+      });
 
-document.getElementById('guest-chat-input').addEventListener('keydown', e => { if (e.key === 'Enter') guestSendChat(); });
+      socket.on('guest:waiting', ({ participantId }) => {
+        mySocketId = participantId || socket.id;
+      });
 
-function guestLeave() {
-  if (isRecording) stopAllRecorders();
-  if (socket) socket.disconnect();
-  window.location.href = '/';
-}
+      socket.on('guest:admitted', () => {
+        showScreen('studio');
+        addMyVideoTile();
+        socket.emit('webrtc:ready', {});
+      });
 
-function cancelWait() {
-  if (socket) socket.disconnect();
-  window.location.href = '/';
-}
+      socket.on('guest:kicked', () => {
+        stopAllRecorders();
+        showScreen('kicked');
+        socket.disconnect();
+      });
 
-function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById(`screen-${id}`).classList.add('active');
-}
+      socket.on('host:left', () => {
+        alert('The host has ended the session.');
+        guestLeave();
+      });
 
-function showError(msg) {
-  const el = document.getElementById('setup-error');
-  el.textContent = msg;
-  el.style.display = 'block';
-}
+      socket.on('participants:update', ({ participants }) => {
+        participantNames = {};
+        Object.values(participants).forEach(p => { participantNames[p.socketId] = p.name; });
+        updateGuestParticipantList(participants);
+      });
 
-// Start
-initDevices();
-</script>
+      socket.on('participant:left', ({ socketId, name }) => {
+        removeGuestTile(socketId);
+        closePeer(socketId);
+      });
+
+      socket.on('webrtc:offer-needed', async ({ targetId, targetName }) => {
+        if (targetId === socket.id) return;
+        participantNames[targetId] = targetName || 'Guest';
+        const pc = createPeer(targetId);
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('webrtc:offer', { targetId, offer });
+      });
+
+      socket.on('webrtc:offer', async ({ fromId, fromName, offer }) => {
+        participantNames[fromId] = fromName || 'Guest';
+        const pc = createPeer(fromId);
+        await pc.setRemoteDescription(offer);
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('webrtc:answer', { targetId: fromId, answer });
+      });
+
+      socket.on('webrtc:answer', async ({ fromId, answer }) => {
+        const pc = peers[fromId];
+        if (pc) await pc.setRemoteDescription(answer);
+      });
+
+      socket.on('webrtc:ice', async ({ fromId, candidate }) => {
+        const pc = peers[fromId];
+        if (pc && candidate) { try { await pc.addIceCandidate(candidate); } catch (e) { } }
+      });
+
+      socket.on('recording:start', () => {
+        isRecording = true;
+        document.getElementById('guest-rec-badge').className = 'rec-badge recording';
+        document.getElementById('guest-rec-text').textContent = 'REC';
+        document.getElementById('guest-rec-label').classList.add('show');
+        startTimer();
+        // Record own stream
+        if (myStream) startRecording('self', myName, myStream);
+        // Record peer streams
+        Object.entries(remoteStreams).forEach(([id, s]) => startRecording(id, participantNames[id] || 'Guest', s));
+      });
+
+      socket.on('recording:stop', () => {
+        isRecording = false;
+        document.getElementById('guest-rec-badge').className = 'rec-badge idle';
+        document.getElementById('guest-rec-text').textContent = 'LIVE';
+        document.getElementById('guest-rec-label').classList.remove('show');
+        stopTimer();
+        stopAllRecorders();
+      });
+
+      socket.on('layout:change', ({ layout }) => updateGuestLayout(layout));
+
+      socket.on('force:mute', ({ muted }) => {
+        if (muted && myStream) {
+          myStream.getAudioTracks().forEach(t => t.enabled = false);
+          guestMicOn = false;
+          document.getElementById('g-ctrl-mic').textContent = '🔇';
+          document.getElementById('g-ctrl-mic').classList.add('off');
+        }
+      });
+
+      socket.on('chat:message', ({ name, message, time }) => {
+        const msgs = document.getElementById('guest-chat-msgs');
+        const div = document.createElement('div');
+        div.className = 'chat-m';
+        div.innerHTML = `<div class="chat-m-name">${name}</div><div style="word-break:break-word">${message}</div>`;
+        msgs.appendChild(div);
+        msgs.scrollTop = msgs.scrollHeight;
+      });
+
+      socket.on('error', ({ message }) => {
+        showError(message);
+        showScreen('setup');
+      });
+    }
+
+    function createPeer(peerId) {
+      if (peers[peerId]) peers[peerId].close();
+      const pc = new RTCPeerConnection(ICE);
+      peers[peerId] = pc;
+      if (myStream) myStream.getTracks().forEach(t => pc.addTrack(t, myStream));
+      pc.onicecandidate = ({ candidate }) => {
+        if (candidate) socket.emit('webrtc:ice', { targetId: peerId, candidate });
+      };
+      pc.ontrack = (event) => {
+        let stream = null;
+        if (event.streams && event.streams[0]) {
+          stream = event.streams[0];
+          remoteStreams[peerId] = stream;
+        } else {
+          stream = remoteStreams[peerId];
+          if (!stream) {
+            stream = new MediaStream();
+            remoteStreams[peerId] = stream;
+          }
+          if (!stream.getTracks().some(t => t.id === event.track.id)) {
+            stream.addTrack(event.track);
+          }
+        }
+        const name = participantNames[peerId] || 'Guest';
+        addGuestVideoTile(peerId, name, stream, false);
+      };
+      return pc;
+    }
+
+    function closePeer(id) {
+      if (peers[id]) { peers[id].close(); delete peers[id]; }
+      delete remoteStreams[id];
+      removeGuestTile(id);
+    }
+
+    function addMyVideoTile() {
+      if (!myStream) return;
+      addGuestVideoTile('self', myName, myStream, true);
+    }
+
+    function addGuestVideoTile(id, name, stream, mirror) {
+      const grid = document.getElementById('guest-grid');
+      let tile = document.getElementById(`gt-${id}`);
+      if (!tile) { tile = document.createElement('div'); tile.className = 'video-tile'; tile.id = `gt-${id}`; grid.appendChild(tile); }
+
+      const hasVideo = stream && stream.getVideoTracks().length > 0;
+      const hasAudio = stream && stream.getAudioTracks().length > 0;
+
+      if (hasVideo && tile.querySelector('video')) {
+        const vid = tile.querySelector('video');
+        if (vid.srcObject !== stream) vid.srcObject = stream;
+        autoUpdateLayout();
+        return;
+      }
+
+      if (!hasVideo && hasAudio && tile.querySelector('audio')) {
+        const aud = tile.querySelector('audio');
+        if (aud.srcObject !== stream) aud.srcObject = stream;
+        autoUpdateLayout();
+        return;
+      }
+
+      tile.innerHTML = '';
+      if (hasVideo) {
+        const vid = document.createElement('video');
+        vid.autoplay = true; vid.playsInline = true;
+        if (mirror) vid.style.transform = 'scaleX(-1)';
+        if (id === 'self') vid.muted = true;
+        vid.srcObject = stream;
+        tile.appendChild(vid);
+      } else {
+        const av = document.createElement('div');
+        av.className = 'tile-avatar';
+        av.textContent = name.charAt(0).toUpperCase();
+        tile.appendChild(av);
+        if (hasAudio) {
+          const aud = document.createElement('audio');
+          aud.autoplay = true;
+          if (id === 'self') aud.muted = true;
+          aud.srcObject = stream;
+          tile.appendChild(aud);
+        }
+      }
+      const lbl = document.createElement('div');
+      lbl.className = 'tile-label';
+      lbl.textContent = name + (id === 'self' ? ' (you)' : '');
+      tile.appendChild(lbl);
+      autoUpdateLayout();
+    }
+
+    function removeGuestTile(id) {
+      document.getElementById(`gt-${id}`)?.remove();
+      autoUpdateLayout();
+    }
+
+    function autoUpdateLayout() {
+      const grid = document.getElementById('guest-grid');
+      const count = grid.children.length;
+      grid.className = 'guest-grid ' + (count <= 1 ? 'l1' : count === 2 ? 'l2' : count === 3 ? 'l3' : 'l4');
+    }
+
+    function updateGuestLayout(layout) {
+      const grid = document.getElementById('guest-grid');
+      const map = { solo: 'l1', side: 'l2', spotlight: 'l3', grid: 'l4' };
+      grid.className = 'guest-grid ' + (map[layout] || 'l1');
+    }
+
+    function updateGuestParticipantList(participants) {
+      const list = document.getElementById('guest-participant-list');
+      list.innerHTML = '';
+      Object.values(participants).forEach(p => {
+        const item = document.createElement('div');
+        item.className = 'g-item';
+        item.innerHTML = `<div class="g-av">${p.name.charAt(0).toUpperCase()}</div><span style="font-size:.8rem;font-weight:700">${p.name}${p.role === 'host' ? ' <span style="color:var(--accent);font-size:.65rem">HOST</span>' : ''}</span>`;
+        list.appendChild(item);
+      });
+    }
+
+    function startRecording(id, name, stream) {
+      if (!stream) return;
+      try {
+        const mr = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: 2500000 });
+        recordingChunks[id] = [];
+        mr.ondataavailable = e => { if (e.data.size > 0) recordingChunks[id].push(e.data); };
+        mr.start(1000);
+        peerRecorders[id] = mr;
+      } catch (e) { console.error('Guest recorder error:', e); }
+    }
+
+    async function stopAllRecorders() {
+      for (const [id, mr] of Object.entries(peerRecorders)) {
+        if (mr.state !== 'inactive') {
+          mr.stop();
+          await new Promise(r => mr.onstop = r);
+        }
+        const blob = new Blob(recordingChunks[id] || [], { type: 'video/webm' });
+        if (blob.size > 0) {
+          const name = id === 'self' ? myName : (participantNames[id] || 'Guest');
+          downloadBlob(blob, `${name.replace(/\s+/g, '_')}_${sessionId}.webm`);
+          // Upload to server
+          const fd = new FormData();
+          fd.append('recording', blob); fd.append('sessionId', sessionId);
+          fd.append('participantId', mySocketId || 'guest'); fd.append('participantName', name); fd.append('type', 'individual');
+          fetch('/api/recordings/upload', { method: 'POST', body: fd }).catch(() => { });
+        }
+      }
+      peerRecorders = {}; recordingChunks = {};
+    }
+
+    function downloadBlob(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+
+    function startTimer() {
+      timerSecs = 0;
+      timerInterval = setInterval(() => {
+        timerSecs++;
+        const m = String(Math.floor(timerSecs / 60)).padStart(2, '0');
+        const s = String(timerSecs % 60).padStart(2, '0');
+        document.getElementById('guest-timer').textContent = `${m}:${s}`;
+      }, 1000);
+    }
+    function stopTimer() { clearInterval(timerInterval); document.getElementById('guest-timer').textContent = ''; }
+
+    function guestToggleMic() {
+      if (!myStream) return;
+      guestMicOn = !guestMicOn;
+      myStream.getAudioTracks().forEach(t => t.enabled = guestMicOn);
+      const ctrl = document.getElementById('g-ctrl-mic');
+      ctrl.textContent = guestMicOn ? '🎤' : '🔇';
+      ctrl.classList.toggle('off', !guestMicOn);
+    }
+
+    function guestToggleCam() {
+      if (!myStream) return;
+      guestCamOn = !guestCamOn;
+      myStream.getVideoTracks().forEach(t => t.enabled = guestCamOn);
+      const ctrl = document.getElementById('g-ctrl-cam');
+      ctrl.textContent = guestCamOn ? '📷' : '🚫';
+      ctrl.classList.toggle('off', !guestCamOn);
+    }
+
+    function guestSendChat() {
+      const inp = document.getElementById('guest-chat-input');
+      const msg = inp.value.trim();
+      if (!msg) return;
+      socket.emit('chat:message', { message: msg });
+      inp.value = '';
+    }
+
+    document.getElementById('guest-chat-input').addEventListener('keydown', e => { if (e.key === 'Enter') guestSendChat(); });
+
+    function guestLeave() {
+      if (isRecording) stopAllRecorders();
+      if (socket) socket.disconnect();
+      window.location.href = '/';
+    }
+
+    function cancelWait() {
+      if (socket) socket.disconnect();
+      window.location.href = '/';
+    }
+
+    function showScreen(id) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(`screen-${id}`).classList.add('active');
+      const nav = document.querySelector('nav');
+      if (nav) {
+        nav.style.display = id === 'studio' ? 'none' : 'flex';
+      }
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('setup-error');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    // Start
+    initDevices();
+  </script>
 </body>
+
 </html>
