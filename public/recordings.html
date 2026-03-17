@@ -449,7 +449,24 @@
     <script>
         async function loadSessions() {
             try {
-                const res = await fetch('/api/sessions');
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    alert('Please log in as a host to view recordings.');
+                    window.location.href = '/';
+                    return;
+                }
+
+                const res = await fetch('/api/sessions', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (res.status === 401) {
+                    localStorage.removeItem('token');
+                    alert('Your session has expired or is invalid. Please log in again.');
+                    window.location.href = '/';
+                    return;
+                }
+
                 const sessions = await res.json();
 
                 document.getElementById('main-loader').style.display = 'none';

@@ -877,6 +877,7 @@
         <button class="stab active" onclick="showPanel('participants')">Guests</button>
         <button class="stab" onclick="showPanel('layout')">Layout</button>
         <button class="stab" onclick="showPanel('chat')">Chat</button>
+        <button class="stab" onclick="showPanel('settings')">⚙️</button>
       </div>
 
       <div class="spanel active" id="panel-participants">
@@ -912,6 +913,20 @@
           <div class="chat-input-wrap">
             <input type="text" class="chat-input" id="chat-input" placeholder="Send a message..." maxlength="200" />
             <button class="chat-send" onclick="sendChat()">→</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="spanel" id="panel-settings">
+        <div class="layout-panel">
+          <div class="layout-label">Media Devices</div>
+          <div class="form-group" style="margin-bottom:1rem">
+            <label style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem">Microphone</label>
+            <select id="setting-mic" class="chat-input" style="width:100%;border-radius:4px" onchange="changeDevice('audioinput', this.value)"></select>
+          </div>
+          <div class="form-group">
+            <label style="font-size:0.75rem;color:var(--muted);display:block;margin-bottom:0.25rem">Camera</label>
+            <select id="setting-cam" class="chat-input" style="width:100%;border-radius:4px" onchange="changeDevice('videoinput', this.value)"></select>
           </div>
         </div>
       </div>
@@ -1450,8 +1465,88 @@
       document.querySelectorAll('.spanel').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.stab').forEach(t => t.classList.remove('active'));
       document.getElementById(`panel-${panel}`).classList.add('active');
-      const tabs = { participants: 0, layout: 1, chat: 2 };
+      const tabs = { participants: 0, layout: 1, chat: 2, settings: 3 };
       document.querySelectorAll('.stab')[tabs[panel]]?.classList.add('active');
+
+      if (panel === 'settings') {
+        loadSettingsDevices();
+      }
+    }
+
+    async function loadSettingsDevices() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const micSel = document.getElementById('setting-mic');
+        const camSel = document.getElementById('setting-cam');
+        micSel.innerHTML = '';
+        camSel.innerHTML = '';
+        
+        let currentAudioId = myStream?.getAudioTracks()[0]?.getSettings().deviceId;
+        let currentVideoId = myStream?.getVideoTracks()[0]?.getSettings().deviceId;
+
+        devices.filter(d => d.kind === 'audioinput').forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d.deviceId;
+          opt.textContent = d.label || `Microphone ${micSel.length + 1}`;
+          if (d.deviceId === currentAudioId) opt.selected = true;
+          micSel.appendChild(opt);
+        });
+        
+        devices.filter(d => d.kind === 'videoinput').forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d.deviceId;
+          opt.textContent = d.label || `Camera ${camSel.length + 1}`;
+          if (d.deviceId === currentVideoId) opt.selected = true;
+          camSel.appendChild(opt);
+        });
+      } catch (e) {
+        console.warn('Could not load devices for settings', e);
+      }
+    }
+
+    async function changeDevice(kind, deviceId) {
+      if (!myStream) return;
+      try {
+        const constraints = {
+          audio: kind === 'audioinput' ? { deviceId: { exact: deviceId } } : true,
+          video: kind === 'videoinput' ? { deviceId: { exact: deviceId } } : true
+        };
+        
+        const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+        
+        if (kind === 'audioinput') {
+          const oldTrack = myStream.getAudioTracks()[0];
+          const newTrack = newStream.getAudioTracks()[0];
+          newTrack.enabled = micOn; // keep mute state
+          myStream.removeTrack(oldTrack);
+          myStream.addTrack(newTrack);
+          oldTrack.stop();
+          // Update RTCPeerConnections
+          Object.values(peers).forEach(pc => {
+            const sender = pc.getSenders().find(s => s.track && s.track.kind === 'audio');
+            if (sender) sender.replaceTrack(newTrack);
+          });
+        } else {
+          const oldTrack = myStream.getVideoTracks()[0];
+          const newTrack = newStream.getVideoTracks()[0];
+          newTrack.enabled = camOn; // keep mute state
+          myStream.removeTrack(oldTrack);
+          myStream.addTrack(newTrack);
+          oldTrack.stop();
+          // Update self tile
+          const vid = document.querySelector('#tile-self video');
+          if (vid) vid.srcObject = myStream;
+          // Update RTCPeerConnections
+          Object.values(peers).forEach(pc => {
+            const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+            if (sender) sender.replaceTrack(newTrack);
+          });
+        }
+        toast('Media device updated');
+      } catch (e) {
+        toast('Failed to change device');
+        console.error(e);
+      }
     }
 
     function copyInvite() {

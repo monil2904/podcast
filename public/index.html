@@ -211,7 +211,7 @@ footer span{color:var(--accent)}
     <a href="#features">Features</a>
     <a href="#how">How it works</a>
     <a href="/recordings">Recordings</a>
-    <button class="btn btn-primary" onclick="openModal()">Start Recording</button>
+    <button class="btn btn-outline" style="padding:.5rem 1rem" onclick="openModal('login')">Host Login</button>
   </div>
 </nav>
 
@@ -382,6 +382,25 @@ footer span{color:var(--accent)}
       <button class="modal-tab" id="tab-join" onclick="switchTab('join')">🔗 Join Session</button>
     </div>
 
+    <!-- Login Tab -->
+    <div id="panel-login" style="display:none">
+      <h2>Host Login</h2>
+      <p>Log in to your account securely via Supabase.</p>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="you@example.com"/>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="login-password" placeholder="••••••••"/>
+      </div>
+      <div id="login-error" class="error-msg">Invalid login credentials.</div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="loginHost()">Log In →</button>
+      </div>
+    </div>
+
     <!-- Host Tab -->
     <div id="panel-host">
       <h2>Start a New Session</h2>
@@ -396,7 +415,7 @@ footer span{color:var(--accent)}
       </div>
       <div id="host-error" class="error-msg">Please enter your name.</div>
       <div class="modal-actions">
-        <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-outline" onclick="logoutHost()">Logout</button>
         <button class="btn btn-primary" onclick="createSession()">Create Session →</button>
       </div>
     </div>
@@ -441,7 +460,43 @@ function switchTab(tab) {
   document.getElementById('tab-host').classList.toggle('active', tab === 'host');
   document.getElementById('tab-join').classList.toggle('active', tab === 'join');
   document.getElementById('panel-host').style.display = tab === 'host' ? 'block' : 'none';
+  document.getElementById('panel-login').style.display = tab === 'login' ? 'block' : 'none';
   document.getElementById('panel-join').style.display = tab === 'join' ? 'block' : 'none';
+}
+
+async function loginHost() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  if (!email || !password) {
+    document.getElementById('login-error').textContent = 'Please fill in all fields.';
+    document.getElementById('login-error').style.display = 'block';
+    return;
+  }
+  
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (data.token) {
+      localStorage.setItem('token', data.token);
+      document.getElementById('login-error').style.display = 'none';
+      switchTab('host');
+    } else {
+      document.getElementById('login-error').textContent = data.error || 'Login failed.';
+      document.getElementById('login-error').style.display = 'block';
+    }
+  } catch(e) {
+    document.getElementById('login-error').textContent = 'Server error.';
+    document.getElementById('login-error').style.display = 'block';
+  }
+}
+
+function logoutHost() {
+  localStorage.removeItem('token');
+  switchTab('login');
 }
 
 async function createSession() {

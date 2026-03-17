@@ -40,6 +40,25 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 // ── REST API ──────────────────────────────────────────────
 
+// Auth Middleware
+const requireAuth = async (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Unauthorized: No token provided' });
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data.user) return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+  req.user = data.user;
+  next();
+};
+
+// Login
+app.post('/api/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) return res.status(401).json({ error: error.message });
+  res.json({ token: data.session.access_token, user: data.user });
+});
+
 // Create session
 app.post('/api/sessions', async (req, res) => {
   const { hostName, title } = req.body;
@@ -67,7 +86,7 @@ app.get('/api/sessions/:id', async (req, res) => {
 });
 
 // List all sessions
-app.get('/api/sessions', async (req, res) => {
+app.get('/api/sessions', requireAuth, async (req, res) => {
   const { data, error } = await supabase
     .from('sessions')
     .select('*')

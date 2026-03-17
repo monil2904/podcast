@@ -841,8 +841,19 @@
           <div class="sidebar-title" style="border-top:1px solid var(--border)">Chat</div>
           <div class="chat-msgs" id="guest-chat-msgs"></div>
           <div class="chat-inp-wrap">
-            <input type="text" class="chat-inp" id="guest-chat-input" placeholder="Message..." maxlength="200" />
+            <input type="text" class="chat-input" style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:.35rem;font-size:.75rem" id="guest-chat-input" placeholder="Message..." maxlength="200" />
             <button class="chat-snd" onclick="guestSendChat()">→</button>
+          </div>
+        </div>
+        <div class="settings-section" style="border-top:1px solid var(--border);padding:0.75rem;">
+          <div class="sidebar-title" style="padding:0;border:none;margin-bottom:0.5rem">Settings</div>
+          <div style="margin-bottom:0.5rem">
+            <label style="font-size:0.65rem;color:var(--muted);display:block;margin-bottom:0.25rem">Microphone</label>
+            <select id="g-setting-mic" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:0.2rem;font-size:0.75rem" onchange="guestChangeDevice('audioinput', this.value)"></select>
+          </div>
+          <div>
+            <label style="font-size:0.65rem;color:var(--muted);display:block;margin-bottom:0.25rem">Camera</label>
+            <select id="g-setting-cam" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:0.2rem;font-size:0.75rem" onchange="guestChangeDevice('videoinput', this.value)"></select>
           </div>
         </div>
       </div>
@@ -1291,7 +1302,85 @@
     }
 
     function toggleGuestSidebar() {
-      document.querySelector('.guest-sidebar').classList.toggle('open');
+      const sidebar = document.querySelector('.guest-sidebar');
+      sidebar.classList.toggle('open');
+      if (sidebar.classList.contains('open')) {
+        guestLoadSettingsDevices();
+      }
+    }
+
+    async function guestLoadSettingsDevices() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const micSel = document.getElementById('g-setting-mic');
+        const camSel = document.getElementById('g-setting-cam');
+        micSel.innerHTML = '';
+        camSel.innerHTML = '';
+        
+        let currentAudioId = myStream?.getAudioTracks()[0]?.getSettings().deviceId;
+        let currentVideoId = myStream?.getVideoTracks()[0]?.getSettings().deviceId;
+
+        devices.filter(d => d.kind === 'audioinput').forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d.deviceId;
+          opt.textContent = d.label || `Microphone ${micSel.length + 1}`;
+          if (d.deviceId === currentAudioId) opt.selected = true;
+          micSel.appendChild(opt);
+        });
+        
+        devices.filter(d => d.kind === 'videoinput').forEach(d => {
+          const opt = document.createElement('option');
+          opt.value = d.deviceId;
+          opt.textContent = d.label || `Camera ${camSel.length + 1}`;
+          if (d.deviceId === currentVideoId) opt.selected = true;
+          camSel.appendChild(opt);
+        });
+      } catch (e) {
+        console.warn('Could not load devices for settings', e);
+      }
+    }
+
+    async function guestChangeDevice(kind, deviceId) {
+      if (!myStream) return;
+      try {
+        const constraints = {
+          audio: kind === 'audioinput' ? { deviceId: { exact: deviceId } } : true,
+          video: kind === 'videoinput' ? { deviceId: { exact: deviceId } } : true
+        };
+        
+        const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+        
+        if (kind === 'audioinput') {
+          const oldTrack = myStream.getAudioTracks()[0];
+          const newTrack = newStream.getAudioTracks()[0];
+          newTrack.enabled = guestMicOn; // keep mute state
+          myStream.removeTrack(oldTrack);
+          myStream.addTrack(newTrack);
+          oldTrack.stop();
+          // Update RTCPeerConnection sender
+          if (hostPeerConnection) {
+            const sender = hostPeerConnection.getSenders().find(s => s.track && s.track.kind === 'audio');
+            if (sender) sender.replaceTrack(newTrack);
+          }
+        } else {
+          const oldTrack = myStream.getVideoTracks()[0];
+          const newTrack = newStream.getVideoTracks()[0];
+          newTrack.enabled = guestCamOn; // keep mute state
+          myStream.removeTrack(oldTrack);
+          myStream.addTrack(newTrack);
+          oldTrack.stop();
+          // Update self tile
+          const vid = document.getElementById('my-video');
+          if (vid) vid.srcObject = myStream;
+          // Update RTCPeerConnection sender
+          if (hostPeerConnection) {
+            const sender = hostPeerConnection.getSenders().find(s => s.track && s.track.kind === 'video');
+            if (sender) sender.replaceTrack(newTrack);
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
     }
 
     // Start
