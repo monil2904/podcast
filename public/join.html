@@ -38,7 +38,13 @@
       font-family: 'Syne', sans-serif;
       min-height: 100vh;
       display: flex;
-      flex-direction: column
+      flex-direction: column;
+      margin: 0;
+    }
+
+    body.studio-mode {
+      height: 100vh;
+      overflow: hidden;
     }
 
     body::before {
@@ -355,7 +361,10 @@
     /* STUDIO (guest in session) */
     .studio-screen {
       flex-direction: column;
-      padding: 0
+      padding: 0;
+      height: 100vh;
+      overflow: hidden;
+      width: 100%;
     }
 
     .studio-topbar {
@@ -502,9 +511,13 @@
       width: 240px;
       background: var(--surface);
       border-left: 1px solid var(--border);
-      display: flex;
+      display: none;
       flex-direction: column;
       overflow: hidden
+    }
+
+    .guest-sidebar.open {
+      display: flex;
     }
 
     .sidebar-title {
@@ -738,7 +751,7 @@
 
 <body>
 
-  <nav>
+  <nav id="main-nav">
     <div class="logo">
       <div class="logo-dot"></div>PodcastStudio
     </div>
@@ -842,6 +855,10 @@
       <div class="ctrl-wrap">
         <div class="ctrl" id="g-ctrl-cam" onclick="guestToggleCam()">📷</div>
         <div class="ctrl-label">Camera</div>
+      </div>
+      <div class="ctrl-wrap">
+        <div class="ctrl" onclick="toggleGuestSidebar()" title="Chat & Guests">💬</div>
+        <div class="ctrl-label">Chat & Guests</div>
       </div>
       <div class="rec-label" id="guest-rec-label">🔴 REC</div>
       <button class="leave-btn" onclick="guestLeave()">Leave</button>
@@ -1256,12 +1273,25 @@
     function showScreen(id) {
       document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
       document.getElementById(`screen-${id}`).classList.add('active');
+      const mainNav = document.getElementById('main-nav');
+      if (mainNav) {
+        mainNav.style.display = id === 'studio' ? 'none' : 'flex';
+      }
+      if (id === 'studio') {
+        document.body.classList.add('studio-mode');
+      } else {
+        document.body.classList.remove('studio-mode');
+      }
     }
 
     function showError(msg) {
       const el = document.getElementById('setup-error');
       el.textContent = msg;
       el.style.display = 'block';
+    }
+
+    function toggleGuestSidebar() {
+      document.querySelector('.guest-sidebar').classList.toggle('open');
     }
 
     // Start

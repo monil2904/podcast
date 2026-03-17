@@ -372,10 +372,14 @@
       width: 280px;
       background: var(--surface);
       border-left: 1px solid var(--border);
-      display: flex;
+      display: none;
       flex-direction: column;
       overflow: hidden;
       flex-shrink: 0;
+    }
+
+    .sidebar.open {
+      display: flex;
     }
 
     .sidebar-tabs {
@@ -928,6 +932,10 @@
       <div class="ctrl-label" id="rec-label">Start Rec</div>
     </div>
     <div class="ctrl-wrap">
+      <div class="ctrl" onclick="showPanel('participants')" title="Guests">👥</div>
+      <div class="ctrl-label">Guests</div>
+    </div>
+    <div class="ctrl-wrap">
       <div class="ctrl" onclick="showPanel('layout')" title="Change Layout">⊞</div>
       <div class="ctrl-label">Layout</div>
     </div>
@@ -1336,7 +1344,7 @@
     // ── PARTICIPANTS ────────────────────────────────────────────
     function showGuestRequest(socketId, name) {
       toast(`🔔 ${name} wants to join — click Admit in Guests tab`);
-      showPanel('participants');
+      showPanel('participants', true);
     }
 
     function addWaitingParticipant(socketId, name) {
@@ -1428,7 +1436,17 @@
     }
 
     // ── UI HELPERS ─────────────────────────────────────────────
-    function showPanel(panel) {
+    function showPanel(panel, forceOpen = false) {
+      const sidebar = document.querySelector('.sidebar');
+      const isAlreadyOpen = sidebar.classList.contains('open');
+      const isAlreadyActive = document.getElementById(`panel-${panel}`).classList.contains('active');
+
+      if (!forceOpen && isAlreadyOpen && isAlreadyActive) {
+        sidebar.classList.remove('open');
+        return;
+      }
+      sidebar.classList.add('open');
+
       document.querySelectorAll('.spanel').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.stab').forEach(t => t.classList.remove('active'));
       document.getElementById(`panel-${panel}`).classList.add('active');
