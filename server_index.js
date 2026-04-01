@@ -1,6 +1,6 @@
 // podcast-studio/server/index.js
 // Run: node server/index.js
-// Requires: npm install express socket.io better-sqlite3 uuid cors multer
+// Requires: npm install express socket.io better-sqlite3 uuid cors multer bcryptjs jsonwebtoken
 
 const express = require('express');
 const http = require('http');
@@ -11,6 +11,8 @@ const multer = require('multer');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const Database = require('better-sqlite3');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const server = http.createServer(app);
@@ -18,6 +20,10 @@ const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
   maxHttpBufferSize: 1e8 // 100MB
 });
+
+// ── CONFIG ────────────────────────────────────────────────
+const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-key-change-in-production';
+const JWT_EXPIRY = '7d';
 
 // Ensure directories exist
 const DATA_DIR = path.join(__dirname, '../data');
@@ -28,21 +34,32 @@ fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 // ── DATABASE ──────────────────────────────────────────────
 const db = new Database(path.join(DATA_DIR, 'studio.db'));
 db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
   CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY,
+    user_id TEXT,
     host_name TEXT,
     title TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     status TEXT DEFAULT 'waiting',
     recording_started_at DATETIME,
-    recording_ended_at DATETIME
+    recording_ended_at DATETIME,
+    FOREIGN KEY(user_id) REFERENCES users(id)
   );
   CREATE TABLE IF NOT EXISTS participants (
     id TEXT PRIMARY KEY,
     session_id TEXT,
     name TEXT,
     joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    role TEXT DEFAULT 'guest'
+    role TEXT DEFAULT 'guest',
+    FOREIGN KEY(session_id) REFERENCES sessions(id)
   );
   CREATE TABLE IF NOT EXISTS recordings (
     id TEXT PRIMARY KEY,
@@ -52,7 +69,8 @@ db.exec(`
     type TEXT,
     filename TEXT,
     filesize INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(session_id) REFERENCES sessions(id)
   );
 `);
 
@@ -69,14 +87,126 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
+// ── AUTH MIDDLEWARE ────────────────────────────────────────
+function verifyToken(req, res, next) {
+  const authHeader = req.headers.authorization;
+  const token = authHeader && authHeader.replace('Bearer ', '');
+
+  if (!token) {
+    return res.status(401).json({ error: 'No token provided' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
+
+// ── AUTH ROUTES ────────────────────────────────────────────
+
+// SIGNUP
+app.post('/api/auth/signup', async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+
+    // Validate input
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Name, email, and password are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    // Check if user already exists
+    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    if (existing) {
+      return res.status(409).json({ error: 'Email already registered' });
+    }
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Create user
+    const userId = uuidv4();
+    db.prepare('INSERT INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)')
+      .run(userId, name, email, passwordHash);
+
+    const user = db.prepare('SELECT id, name, email FROM users WHERE id = ?').get(userId);
+    const accessToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+
+    res.json({ user, accessToken });
+  } catch (err) {
+    console.error('Signup error:', err);
+    res.status(500).json({ error: 'Sign up failed' });
+  }
+});
+
+// LOGIN
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Validate input
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    // Find user
+    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // Verify password
+    const isValid = await bcrypt.compare(password, user.password_hash);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // Generate token
+    const accessToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+
+    const userRes = { id: user.id, name: user.name, email: user.email };
+    res.json({ user: userRes, accessToken });
+  } catch (err) {
+    console.error('Login error:', err);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// GET CURRENT USER
+app.get('/api/auth/me', verifyToken, (req, res) => {
+  try {
+    const user = db.prepare('SELECT id, name, email FROM users WHERE id = ?').get(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const accessToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: JWT_EXPIRY });
+    res.json({ user, accessToken });
+  } catch (err) {
+    console.error('Get user error:', err);
+    res.status(500).json({ error: 'Failed to get user' });
+  }
+});
+
+// LOGOUT (just frontend-side, but provided for completeness)
+app.post('/api/auth/logout', verifyToken, (req, res) => {
+  res.json({ message: 'Logged out successfully' });
+});
+
 // ── REST API ──────────────────────────────────────────────
 
 // Create session
-app.post('/api/sessions', (req, res) => {
+app.post('/api/sessions', verifyToken, (req, res) => {
   const { hostName, title } = req.body;
   if (!hostName) return res.status(400).json({ error: 'Host name required' });
   const id = uuidv4().slice(0, 8).toUpperCase();
-  db.prepare('INSERT INTO sessions (id, host_name, title) VALUES (?, ?, ?)').run(id, hostName, title || 'Podcast Session');
+  db.prepare('INSERT INTO sessions (id, user_id, host_name, title) VALUES (?, ?, ?, ?)').run(id, req.user.userId, hostName, title || 'Podcast Session');
   res.json({ sessionId: id });
 });
 
