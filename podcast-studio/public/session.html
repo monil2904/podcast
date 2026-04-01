@@ -222,6 +222,13 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      transition: box-shadow 0.2s ease, transform 0.2s ease;
+      border-radius: 8px;
+    }
+
+    .video-tile.speaker {
+      box-shadow: 0 0 20px var(--accent), inset 0 0 10px rgba(249, 115, 22, 0.2);
+      transform: scale(1.02);
     }
 
     .video-tile video {
@@ -229,6 +236,88 @@
       height: 100%;
       object-fit: cover;
       display: block
+    }
+
+    /* Audio level meter */
+    .audio-meter {
+      position: absolute;
+      top: .5rem;
+      left: .5rem;
+      height: 4px;
+      width: 40px;
+      background: rgba(0, 0, 0, .5);
+      border-radius: 2px;
+      overflow: hidden;
+      z-index: 15;
+      backdrop-filter: blur(4px);
+    }
+
+    .audio-meter-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--green) 0%, var(--accent) 50%, var(--red) 100%);
+      width: 0%;
+      transition: width 0.05s linear;
+    }
+
+    /* Status indicators */
+    .tile-status-badges {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      display: flex;
+      gap: 0.4rem;
+      align-items: center;
+      z-index: 15;
+    }
+
+    .status-badge {
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
+      padding: 0.25rem 0.4rem;
+      font-size: 0.65rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      backdrop-filter: blur(4px);
+      color: var(--text);
+    }
+
+    .status-badge.muted {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.5);
+      color: var(--red);
+    }
+
+    .status-badge.camera-off {
+      background: rgba(59, 130, 246, 0.2);
+      border-color: rgba(59, 130, 246, 0.5);
+      color: var(--blue);
+    }
+
+    .status-badge.quality-poor {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--red);
+    }
+
+    .status-badge.quality-fair {
+      background: rgba(234, 179, 8, 0.15);
+      color: #eab308;
+    }
+
+    .status-badge.quality-good {
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--green);
+    }
+
+    .status-icon {
+      width: 12px;
+      height: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.5rem;
     }
 
     .tile-label {
@@ -985,6 +1074,12 @@
     let myRole = localStorage.getItem('myRole') || 'guest';
     let authToken = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || '';
     let authUserId = '';
+    
+    // Audio level & speaker detection (Zoom/Meet style)
+    let audioAnalysers = {}; // socketId -> AnalyserNode
+    let audioLevels = {}; // socketId -> current level
+    let activeSpeaker = 'self'; // Track who is currently speaking
+    let audioContext = null;
 
     const ICE_CONFIG = {
       iceServers: [
@@ -1216,6 +1311,118 @@
       removeVideoTile(peerId);
     }
 
+    // ── CONNECTION QUALITY MONITORING ──────────────────────────
+    async function monitorConnectionQuality() {
+      for (const peerId in peers) {
+        const pc = peers[peerId];
+        if (!pc || !pc.connectionState || pc.connectionState === 'failed') continue;
+
+        try {
+          const stats = await pc.getStats();
+          let packetLoss = 0;
+          let latency = 0;
+          let bandwidth = 0;
+
+          stats.forEach(report => {
+            if (report.type === 'inbound-rtp' && report.kind === 'audio') {
+              // Calculate packet loss ratio
+              const packetsLost = report.packetsLost || 0;
+              const packetsReceived = report.packetsReceived || 0;
+              if (packetsReceived > 0) {
+                packetLoss = (packetsLost / (packetsLost + packetsReceived)) * 100;
+              }
+              // Estimate bandwidth
+              if (report.bytesReceived && report.timestamp) {
+                bandwidth = (report.bytesReceived * 8) / 1024; // kbps estimate
+              }
+            } else if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+              // Get RTT (round-trip time)
+              latency = report.currentRoundTripTime ? Math.round(report.currentRoundTripTime * 1000) : 0;
+            }
+          });
+
+          // Determine connection quality
+          let quality = 'good';
+          let color = 'var(--green)';
+          if (packetLoss > 5 || latency > 200) {
+            quality = 'poor';
+            color = 'var(--red)';
+          } else if (packetLoss > 2 || latency > 100) {
+            quality = 'fair';
+            color = '#eab308';
+          }
+
+          // Update quality badge
+          const badge = document.querySelector(`#quality-badge-${peerId}`);
+          if (badge) {
+            badge.textContent = `📶 ${quality.charAt(0).toUpperCase() + quality.slice(1)} (${Math.round(latency)}ms)`;
+            badge.className = `status-badge quality-${quality}`;
+            // Show badge only if quality is not good
+            badge.style.display = quality === 'good' ? 'none' : 'flex';
+          }
+        } catch (e) {
+          console.warn('Error monitoring connection quality:', e);
+        }
+      }
+
+      requestAnimationFrame(monitorConnectionQuality);
+    }
+
+    // ── AUDIO ANALYSIS (Speaker Detection) ─────────────────────
+    function setupAudioAnalysis(id, stream) {
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      try {
+        const source = audioContext.createMediaStreamSource(stream);
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        audioAnalysers[id] = analyser;
+      } catch (e) {
+        console.warn('Audio analysis setup failed:', e);
+      }
+    }
+
+    function updateAudioLevels() {
+      Object.entries(audioAnalysers).forEach(([id, analyser]) => {
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(dataArray);
+        const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+        audioLevels[id] = Math.min(100, Math.round((average / 255) * 100));
+      });
+
+      // Find active speaker (highest audio level)
+      let maxLevel = 0;
+      let currentSpeaker = activeSpeaker;
+      Object.entries(audioLevels).forEach(([id, level]) => {
+        if (level > maxLevel) {
+          maxLevel = level;
+          currentSpeaker = id;
+        }
+      });
+
+      // Update speaker highlight if changed
+      if (maxLevel > 15 && currentSpeaker !== activeSpeaker) {
+        activeSpeaker = currentSpeaker;
+        updateSpeakerHighlight();
+      }
+
+      requestAnimationFrame(updateAudioLevels);
+    }
+
+    function updateSpeakerHighlight() {
+      document.querySelectorAll('.video-tile').forEach(tile => {
+        const id = tile.id.replace('tile-', '');
+        if (id === activeSpeaker && audioLevels[id] > 15) {
+          tile.style.boxShadow = '0 0 20px var(--accent), inset 0 0 10px rgba(249, 115, 22, 0.2)';
+          tile.style.borderRadius = '8px';
+        } else {
+          tile.style.boxShadow = 'none';
+        }
+      });
+    }
+
     // ── VIDEO TILES ─────────────────────────────────────────────
     function addVideoTile(id, name, stream, mirror) {
       const grid = document.getElementById('stage-grid');
@@ -1233,6 +1440,7 @@
       if (hasVideo && tile.querySelector('video')) {
         const vid = tile.querySelector('video');
         if (vid.srcObject !== stream) vid.srcObject = stream;
+        if (hasAudio && !audioAnalysers[id]) setupAudioAnalysis(id, stream);
         updateLayout(currentLayout);
         return;
       }
@@ -1240,11 +1448,21 @@
       if (!hasVideo && hasAudio && tile.querySelector('audio')) {
         const aud = tile.querySelector('audio');
         if (aud.srcObject !== stream) aud.srcObject = stream;
+        if (hasAudio && !audioAnalysers[id]) setupAudioAnalysis(id, stream);
         updateLayout(currentLayout);
         return;
       }
 
       tile.innerHTML = '';
+
+      // Audio level meter
+      const meter = document.createElement('div');
+      meter.className = 'audio-meter';
+      meter.id = `meter-${id}`;
+      const meterFill = document.createElement('div');
+      meterFill.className = 'audio-meter-fill';
+      meter.appendChild(meterFill);
+      tile.appendChild(meter);
 
       if (hasVideo) {
         const vid = document.createElement('video');
@@ -1269,10 +1487,46 @@
         }
       }
 
+      // Status badges (mute, camera, connection quality)
+      const badges = document.createElement('div');
+      badges.className = 'tile-status-badges';
+      badges.id = `badges-${id}`;
+
+      if (!hasAudio) {
+        const muteBadge = document.createElement('div');
+        muteBadge.className = 'status-badge muted';
+        muteBadge.innerHTML = '🔇 Muted';
+        muteBadge.id = `mute-badge-${id}`;
+        badges.appendChild(muteBadge);
+      }
+
+      if (!hasVideo) {
+        const cameraBadge = document.createElement('div');
+        cameraBadge.className = 'status-badge camera-off';
+        cameraBadge.innerHTML = '📷 Off';
+        cameraBadge.id = `camera-badge-${id}`;
+        badges.appendChild(cameraBadge);
+      }
+
+      // Placeholder for connection quality badge (will be populated by stats monitoring)
+      const qualityBadge = document.createElement('div');
+      qualityBadge.className = 'status-badge quality-good';
+      qualityBadge.innerHTML = '📶 Good';
+      qualityBadge.id = `quality-badge-${id}`;
+      qualityBadge.style.display = 'none'; // Hidden by default, shown if connection is poor
+      badges.appendChild(qualityBadge);
+
+      tile.appendChild(badges);
+
       const label = document.createElement('div');
       label.className = 'tile-label';
       label.innerHTML = `${name}${id === 'self' ? ' <span style="color:var(--accent)">(you)</span>' : ''}`;
       tile.appendChild(label);
+
+      // Setup audio analysis for speaker detection
+      if (hasAudio && stream && !audioAnalysers[id]) {
+        setupAudioAnalysis(id, stream);
+      }
 
       updateLayout(currentLayout);
 
@@ -1283,6 +1537,17 @@
           playPromise.catch(e => console.warn('Autoplay prevented:', e));
         }
       }
+    }
+
+    // Update audio meter visualization
+    function updateAudioMeters() {
+      Object.entries(audioLevels).forEach(([id, level]) => {
+        const meterFill = document.querySelector(`#meter-${id} .audio-meter-fill`);
+        if (meterFill) {
+          meterFill.style.width = level + '%';
+        }
+      });
+      requestAnimationFrame(updateAudioMeters);
     }
 
     function removeVideoTile(id) {
@@ -1327,7 +1592,8 @@
       }
     }
 
-    let displayStream = null;
+    let recordingCanvas = null;
+    let recordingCanvasStream = null;
 
     async function startAllRecorders() {
       isRecording = true;
@@ -1337,25 +1603,97 @@
       document.getElementById('rec-label').textContent = 'Stop Rec';
       startTimer();
 
-      // Combined session recording
+      // Combined session recording via canvas (16:9 YouTube format)
       try {
         if (myRole === 'host' && recordCombinedLayout) {
-          displayStream = await navigator.mediaDevices.getDisplayMedia({
-            video: { displaySurface: "browser" },
-            audio: true
-          });
-          combinedRecorder = new MediaRecorder(displayStream, { mimeType: 'video/webm;codecs=vp8,opus' });
+          // Create canvas: 1920x1080 (16:9 YouTube format)
+          recordingCanvas = document.createElement('canvas');
+          recordingCanvas.width = 1920;
+          recordingCanvas.height = 1080;
+          const canvasCtx = recordingCanvas.getContext('2d');
+
+          // Get audio from host's stream if available, otherwise create silent audio
+          let audioTracks = [];
+          if (myStream && myStream.getAudioTracks().length > 0) {
+            audioTracks = [myStream.getAudioTracks()[0]];
+          }
+
+          // Combine canvas video with audio
+          recordingCanvasStream = new MediaStream([recordingCanvas.captureStream(30).getVideoTracks()[0], ...audioTracks]);
+
+          // Start drawing loop
+          const drawInterval = setInterval(() => {
+            if (!isRecording) { clearInterval(drawInterval); return; }
+            const stage = document.getElementById('stage');
+            if (stage) {
+              // Fill background
+              canvasCtx.fillStyle = '#000';
+              canvasCtx.fillRect(0, 0, recordingCanvas.width, recordingCanvas.height);
+
+              // Get current stage grid
+              const grid = document.getElementById('stage-grid');
+              const tiles = grid.querySelectorAll('.video-tile');
+
+              if (tiles.length === 0) {
+                // No tiles, show placeholder
+                canvasCtx.fillStyle = '#666';
+                canvasCtx.font = '48px Arial';
+                canvasCtx.textAlign = 'center';
+                canvasCtx.fillText('Waiting for participants...', recordingCanvas.width / 2, recordingCanvas.height / 2);
+              } else {
+                // Draw tiles based on current layout
+                const tileWidth = recordingCanvas.width / 2;
+                const tileHeight = recordingCanvas.height / 2;
+
+                tiles.forEach((tile, idx) => {
+                  const video = tile.querySelector('video');
+                  const avatar = tile.querySelector('.tile-avatar');
+                  const label = tile.querySelector('.tile-label');
+
+                  // Calculate position based on layout
+                  let x = 0, y = 0;
+                  if (tiles.length === 1) {
+                    x = recordingCanvas.width / 4; y = recordingCanvas.height / 4;
+                    canvasCtx.drawImage(video || avatar || recordingCanvas, x, y, tileWidth, tileHeight);
+                  } else if (tiles.length === 2) {
+                    x = (idx % 2) * tileWidth; y = 0;
+                    canvasCtx.drawImage(video || avatar || recordingCanvas, x, y, tileWidth, tileHeight);
+                  } else if (tiles.length === 3) {
+                    if (idx === 0) { x = 0; y = 0; canvasCtx.drawImage(video || avatar || recordingCanvas, x, y, recordingCanvas.width, tileHeight); }
+                    else { x = (idx - 1) * tileWidth; y = tileHeight; canvasCtx.drawImage(video || avatar || recordingCanvas, x, y, tileWidth, tileHeight); }
+                  } else {
+                    x = (idx % 2) * tileWidth; y = Math.floor(idx / 2) * tileHeight;
+                    canvasCtx.drawImage(video || avatar || recordingCanvas, x, y, tileWidth, tileHeight);
+                  }
+
+                  // Draw label text
+                  if (label) {
+                    canvasCtx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                    canvasCtx.fillRect(x + 10, y + 10, 200, 40);
+                    canvasCtx.fillStyle = '#fff';
+                    canvasCtx.font = '20px Arial';
+                    canvasCtx.fillText(label.textContent || 'User', x + 20, y + 35);
+                  }
+                });
+              }
+            }
+          }, 33); // ~30fps
+        }
+      } catch (err) {
+        console.warn("Could not create canvas recording:", err);
+        toast("Combined recording skipped. Canvas setup failed.");
+      }
+
+      // Start recording the canvas stream
+      if (recordingCanvasStream) {
+        try {
+          combinedRecorder = new MediaRecorder(recordingCanvasStream, { mimeType: 'video/webm;codecs=vp8,opus' });
           recordingChunks['combined'] = [];
           combinedRecorder.ondataavailable = e => { if (e.data.size > 0) recordingChunks['combined'].push(e.data); };
           combinedRecorder.start(1000);
-
-          displayStream.getVideoTracks()[0].onended = () => {
-            if (isRecording) toggleRecording();
-          };
+        } catch (err) {
+          console.warn("Failed to start canvas recorder:", err);
         }
-      } catch (err) {
-        console.warn("Could not capture screen for combined recording:", err);
-        toast("Combined recording skipped. You must allow screen share.");
       }
 
       // Record each peer stream individually
@@ -1363,7 +1701,7 @@
         startRecording(id, participantNames[id] || 'Guest', stream);
       });
 
-      toast('🔴 Recording started');
+      toast('🔴 Recording started - 16:9 format');
     }
 
     function startRecording(id, name, stream) {
@@ -1393,11 +1731,10 @@
       if (combinedRecorder && combinedRecorder.state !== 'inactive') {
         combinedRecorder.stop();
         await new Promise(r => combinedRecorder.onstop = r);
-        if (displayStream) displayStream.getTracks().forEach(t => t.stop());
+        if (recordingCanvasStream) recordingCanvasStream.getTracks().forEach(t => t.stop());
         const blob = new Blob(recordingChunks['combined'] || [], { type: 'video/webm' });
         if (blob.size > 0) {
           await uploadRecording(blob, authUserId || 'self', myName, 'combined');
-          downloadRecording(blob, `Combined_${sessionId}.webm`);
         }
       }
 
@@ -1412,14 +1749,14 @@
           const name = id === 'self' ? myName : (participantNames[id] || 'Guest');
           const participantId = id === 'self' ? (authUserId || 'self') : (participantUserIds[id] || id);
           await uploadRecording(blob, participantId, name, 'individual');
-          downloadRecording(blob, `${name.replace(/\s+/g, '_')}_${sessionId}.webm`);
         }
       }
       peerRecorders = {};
       recordingChunks = {};
       combinedRecorder = null;
-      displayStream = null;
-      toast('✅ Recordings saved & downloaded');
+      recordingCanvas = null;
+      recordingCanvasStream = null;
+      toast('✅ Recordings saved to Supabase (16:9 format)');
     }
 
     async function uploadRecording(blob, participantId, participantName, type) {
@@ -1441,16 +1778,8 @@
       }
     }
 
-    function downloadRecording(blob, filename) {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-    }
+    // Recordings are now saved directly to Supabase only - no local downloads
+    // Use the Recordings page to download uploaded files if needed
 
     // ── TIMER ──────────────────────────────────────────────────
     function startTimer() {
@@ -1712,6 +2041,11 @@
       participantUserIds['self'] = authUserId || 'self';
 
       init();
+
+      // Start audio level monitoring (speaker detection & visualization)
+      updateAudioLevels();
+      updateAudioMeters();
+      monitorConnectionQuality();
     })();
   </script>
 </body>

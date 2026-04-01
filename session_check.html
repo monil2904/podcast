@@ -1,0 +1,876 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PodcastStudio — Professional Recording Platform</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#060810;
+  --bg2:#0d1117;
+  --surface:#111827;
+  --border:#1f2937;
+  --accent:#f97316;
+  --accent2:#fb923c;
+  --green:#22c55e;
+  --red:#ef4444;
+  --text:#f1f5f9;
+  --muted:#64748b;
+  --card:#0f1623;
+}
+body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;overflow-x:hidden}
+
+/* Animated background */
+body::before{
+  content:'';position:fixed;inset:0;
+  background:radial-gradient(ellipse 80% 60% at 50% -20%,rgba(249,115,22,.12),transparent),
+             radial-gradient(ellipse 40% 40% at 90% 80%,rgba(34,197,94,.06),transparent);
+  pointer-events:none;z-index:0;
+}
+
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:1.25rem 2.5rem;
+  border-bottom:1px solid rgba(249,115,22,.15);
+  background:rgba(6,8,16,.85);
+  backdrop-filter:blur(20px);
+}
+.logo{display:flex;align-items:center;gap:.75rem;font-size:1.25rem;font-weight:800;letter-spacing:-.02em}
+.logo-dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 16px var(--accent);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.8)}}
+.nav-links{display:flex;gap:2rem;align-items:center}
+.nav-links a{color:var(--muted);text-decoration:none;font-size:.875rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;transition:color .2s}
+.nav-links a:hover{color:var(--text)}
+.btn{display:inline-flex;align-items:center;gap:.5rem;padding:.6rem 1.5rem;border-radius:6px;font-family:'Syne',sans-serif;font-weight:700;font-size:.875rem;cursor:pointer;border:none;transition:all .2s;text-decoration:none}
+.btn-primary{background:var(--accent);color:#000}
+.btn-primary:hover{background:var(--accent2);transform:translateY(-1px)}
+.btn-outline{background:transparent;color:var(--text);border:1px solid var(--border)}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent)}
+
+main{position:relative;z-index:1}
+
+/* HERO */
+.hero{
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  padding:8rem 2rem 4rem;text-align:center;
+}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:.5rem;
+  padding:.35rem 1rem;border-radius:20px;
+  border:1px solid rgba(249,115,22,.3);
+  background:rgba(249,115,22,.08);
+  font-size:.75rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);
+  margin-bottom:2rem;
+}
+.hero h1{
+  font-size:clamp(3rem,8vw,6rem);font-weight:800;line-height:.95;letter-spacing:-.04em;
+  margin-bottom:1.5rem;
+}
+.hero h1 span{
+  background:linear-gradient(135deg,var(--accent),#fbbf24);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.hero p{font-size:1.2rem;color:var(--muted);max-width:560px;margin:0 auto 2.5rem;line-height:1.7;font-family:'DM Mono',monospace;font-weight:300}
+.hero-actions{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
+.hero-stat{display:flex;gap:3rem;justify-content:center;margin-top:4rem;flex-wrap:wrap}
+.stat{text-align:center}
+.stat-num{font-size:2rem;font-weight:800;color:var(--accent)}
+.stat-label{font-size:.75rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:.25rem}
+
+/* STUDIO PREVIEW */
+.studio-preview{
+  margin:0 auto;max-width:900px;padding:0 2rem 6rem;
+}
+.preview-frame{
+  border-radius:16px;border:1px solid var(--border);overflow:hidden;
+  box-shadow:0 40px 100px rgba(0,0,0,.6),0 0 0 1px rgba(249,115,22,.1);
+}
+.preview-bar{
+  background:var(--surface);padding:.75rem 1rem;display:flex;align-items:center;gap:.5rem;
+  border-bottom:1px solid var(--border);
+}
+.preview-dot{width:10px;height:10px;border-radius:50%}
+.preview-grid{
+  background:var(--card);display:grid;grid-template-columns:1fr 1fr;gap:2px;aspect-ratio:16/9;
+}
+.preview-cell{
+  background:var(--bg2);display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;
+}
+.preview-cell::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(circle at 50% 50%,rgba(249,115,22,.05),transparent 70%);
+}
+.avatar-ring{
+  width:64px;height:64px;border-radius:50%;
+  border:2px solid var(--accent);display:flex;align-items:center;justify-content:center;
+  font-size:1.5rem;font-weight:800;background:var(--surface);
+}
+.participant-label{
+  position:absolute;bottom:.75rem;left:.75rem;
+  background:rgba(0,0,0,.7);padding:.25rem .75rem;border-radius:4px;
+  font-size:.75rem;font-weight:700;display:flex;align-items:center;gap:.35rem;
+}
+.rec-dot{width:6px;height:6px;border-radius:50%;background:var(--red);animation:pulse 1s infinite}
+.preview-controls{
+  background:var(--surface);padding:1rem;display:flex;justify-content:center;gap:.75rem;
+  border-top:1px solid var(--border);
+}
+.ctrl-btn{
+  width:42px;height:42px;border-radius:50%;border:1px solid var(--border);
+  background:var(--bg2);display:flex;align-items:center;justify-content:center;
+  cursor:pointer;font-size:1rem;transition:all .2s;
+}
+.ctrl-btn:hover{border-color:var(--accent);background:rgba(249,115,22,.1)}
+.ctrl-btn.active{background:var(--red);border-color:var(--red)}
+.ctrl-btn.rec{background:var(--red);border-color:var(--red);box-shadow:0 0 20px rgba(239,68,68,.4)}
+
+/* FEATURES */
+.features{padding:5rem 2rem;max-width:1200px;margin:0 auto}
+.section-label{font-size:.75rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--accent);text-align:center;margin-bottom:1rem}
+.section-title{font-size:clamp(2rem,4vw,3rem);font-weight:800;text-align:center;letter-spacing:-.03em;margin-bottom:1rem}
+.section-sub{text-align:center;color:var(--muted);font-family:'DM Mono',monospace;font-size:.9rem;margin-bottom:4rem}
+.features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem}
+.feature-card{
+  padding:2rem;border-radius:12px;border:1px solid var(--border);background:var(--card);
+  transition:all .3s;
+}
+.feature-card:hover{border-color:rgba(249,115,22,.3);transform:translateY(-4px)}
+.feature-icon{font-size:2rem;margin-bottom:1rem}
+.feature-title{font-size:1.1rem;font-weight:700;margin-bottom:.5rem}
+.feature-desc{font-size:.875rem;color:var(--muted);line-height:1.6;font-family:'DM Mono',monospace;font-weight:300}
+
+/* HOW IT WORKS */
+.how{padding:5rem 2rem;background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.how-inner{max-width:1000px;margin:0 auto}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:2rem;margin-top:3rem}
+.step{text-align:center;padding:2rem 1rem}
+.step-num{
+  width:48px;height:48px;border-radius:50%;
+  background:linear-gradient(135deg,var(--accent),#fbbf24);
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.25rem;font-weight:800;color:#000;margin:0 auto 1rem;
+}
+.step h3{font-size:1rem;font-weight:700;margin-bottom:.5rem}
+.step p{font-size:.8rem;color:var(--muted);line-height:1.6;font-family:'DM Mono',monospace;font-weight:300}
+
+/* CTA */
+.cta{padding:6rem 2rem;text-align:center}
+.cta h2{font-size:clamp(2rem,5vw,3.5rem);font-weight:800;letter-spacing:-.03em;margin-bottom:1rem}
+.cta p{color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:2rem}
+.cta-btns{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
+
+/* Modal */
+.modal-overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(8px);
+  z-index:1000;align-items:center;justify-content:center;
+}
+.modal-overlay.open{display:flex}
+.modal{
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:2.5rem;width:100%;max-width:440px;
+  animation:slideUp .3s ease;
+}
+@keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.modal h2{font-size:1.5rem;font-weight:800;margin-bottom:.5rem}
+.modal p{color:var(--muted);font-size:.875rem;margin-bottom:2rem;font-family:'DM Mono',monospace;font-weight:300}
+.form-group{margin-bottom:1.25rem}
+.form-group label{display:block;font-size:.75rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;margin-bottom:.5rem;color:var(--muted)}
+.form-group input{
+  width:100%;padding:.75rem 1rem;background:var(--bg);border:1px solid var(--border);
+  border-radius:8px;color:var(--text);font-family:'Syne',sans-serif;font-size:.95rem;
+  outline:none;transition:border-color .2s;
+}
+.form-group input:focus{border-color:var(--accent)}
+.modal-actions{display:flex;gap:.75rem;margin-top:2rem}
+.modal-actions .btn{flex:1;justify-content:center}
+.error-msg{color:var(--red);font-size:.8rem;margin-top:.5rem;display:none}
+
+/* Tabs in modal */
+.modal-tabs{display:flex;gap:0;margin-bottom:2rem;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.modal-tab{flex:1;padding:.65rem;text-align:center;cursor:pointer;font-size:.85rem;font-weight:700;transition:all .2s;border:none;background:transparent;color:var(--muted);font-family:'Syne',sans-serif}
+.modal-tab.active{background:var(--accent);color:#000}
+
+footer{
+  border-top:1px solid var(--border);padding:2rem;text-align:center;
+  font-size:.8rem;color:var(--muted);font-family:'DM Mono',monospace;font-weight:300;
+}
+footer span{color:var(--accent)}
+
+@media (max-width:900px){
+  nav{padding:1rem 1.25rem;flex-wrap:wrap;gap:.75rem}
+  .nav-links{gap:.75rem;flex-wrap:wrap;justify-content:flex-end}
+  .nav-links a{font-size:.75rem}
+  .hero{min-height:auto;padding:7rem 1.25rem 3rem}
+  .hero h1{font-size:clamp(2.25rem,12vw,3.5rem);line-height:1}
+  .hero p{font-size:1rem;max-width:100%}
+  .hero-stat{gap:1.25rem;margin-top:2rem}
+  .stat-num{font-size:1.4rem}
+  .studio-preview{padding:0 1rem 4rem}
+  .preview-grid{aspect-ratio:4/3}
+  .features{padding:4rem 1rem}
+  .features-grid{grid-template-columns:1fr}
+  .how{padding:4rem 1rem}
+  .steps{grid-template-columns:1fr;gap:1rem}
+  .step{padding:1.25rem .5rem}
+  .cta{padding:4rem 1rem}
+  .modal{max-width:calc(100vw - 1.5rem);padding:1.5rem}
+  .modal-actions{flex-direction:column}
+}
+
+@media (max-width:600px){
+  .logo{font-size:1rem}
+  .nav-links{width:100%;justify-content:flex-start}
+  .nav-links a{display:none}
+  .btn{padding:.55rem .9rem;font-size:.78rem}
+  .hero-badge{font-size:.65rem}
+  .hero-actions,.cta-btns{flex-direction:column;align-items:stretch}
+  .hero-actions .btn,.cta-btns .btn{width:100%;justify-content:center}
+  .participant-label{font-size:.65rem;padding:.2rem .45rem;left:.45rem;bottom:.45rem}
+  .preview-controls{gap:.5rem;padding:.75rem}
+  .ctrl-btn{width:36px;height:36px;font-size:.85rem}
+  footer{padding:1.5rem 1rem}
+}
+</style>
+</head>
+<body>
+<nav>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    PodcastStudio
+  </div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#how">How it works</a>
+    <a href="/recordings" id="nav-recordings-link" style="display:none">Recordings</a>
+    <button class="btn btn-primary" id="nav-auth-btn" onclick="handlePrimaryAction()">Login</button>
+    <button class="btn btn-outline" id="nav-logout-btn" onclick="logout()" style="display:none">Logout</button>
+  </div>
+</nav>
+
+<main>
+  <section class="hero">
+    <div>
+      <div class="hero-badge">🎙️ Live Remote Recording</div>
+      <h1>Record Podcasts<br/>With Anyone,<br/><span>Anywhere.</span></h1>
+      <p>Professional-grade browser-based studio. No downloads, no plugins. Up to 4 guests with individual track recording.</p>
+      <div class="hero-actions" id="login-prompt">
+        <button class="btn btn-primary" onclick="openLoginModal()" style="font-size:1rem;padding:.85rem 2rem">
+          Login to Continue
+        </button>
+      </div>
+      <div class="hero-actions" id="studio-actions" style="display:none">
+        <button class="btn btn-primary" onclick="openModal('host')" style="font-size:1rem;padding:.85rem 2rem">
+          🎙️ Start a Session
+        </button>
+        <button class="btn btn-outline" onclick="openModal('join')" style="font-size:1rem;padding:.85rem 2rem">
+          🔗 Join a Session
+        </button>
+      </div>
+      <div class="hero-stat">
+        <div class="stat"><div class="stat-num">4</div><div class="stat-label">Max Guests</div></div>
+        <div class="stat"><div class="stat-num">HD</div><div class="stat-label">Video Quality</div></div>
+        <div class="stat"><div class="stat-num">RAW</div><div class="stat-label">Individual Tracks</div></div>
+        <div class="stat"><div class="stat-num">Live</div><div class="stat-label">WebRTC</div></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="studio-preview">
+    <div class="preview-frame">
+      <div class="preview-bar">
+        <div class="preview-dot" style="background:#ef4444"></div>
+        <div class="preview-dot" style="background:#f59e0b"></div>
+        <div class="preview-dot" style="background:#22c55e"></div>
+        <span style="margin-left:.75rem;font-size:.75rem;color:#64748b;font-family:'DM Mono',monospace">Session: ABC12345 · 00:23:41 ● REC</span>
+      </div>
+      <div class="preview-grid">
+        <div class="preview-cell">
+          <div class="avatar-ring">M</div>
+          <div class="participant-label"><div class="rec-dot"></div>het (Host)</div>
+        </div>
+        <div class="preview-cell">
+          <div class="avatar-ring" style="border-color:#22c55e">A</div>
+          <div class="participant-label"><div class="rec-dot"></div>ayush</div>
+        </div>
+        <div class="preview-cell">
+          <div class="avatar-ring" style="border-color:#3b82f6">R</div>
+          <div class="participant-label"><div class="rec-dot"></div>Rohan</div>
+        </div>
+        <div class="preview-cell" style="opacity:.4">
+          <span style="font-size:.75rem;color:#64748b;font-family:'DM Mono',monospace">+ Invite Guest 4</span>
+        </div>
+      </div>
+      <div class="preview-controls">
+        <div class="ctrl-btn" title="Mute">🎤</div>
+        <div class="ctrl-btn" title="Camera">📷</div>
+        <div class="ctrl-btn rec" title="Recording">⏺</div>
+        <div class="ctrl-btn" title="Layout">⊞</div>
+        <div class="ctrl-btn" title="Chat">💬</div>
+        <div class="ctrl-btn" title="Leave" style="border-color:#ef4444">📴</div>
+      </div>
+    </div>
+  </div>
+
+  <section class="features" id="features">
+    <div class="section-label">What's included</div>
+    <h2 class="section-title">Everything You Need</h2>
+    <p class="section-sub">// built for serious podcasters, not just calls</p>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🎙️</div>
+        <div class="feature-title">Individual Track Recording</div>
+        <div class="feature-desc">Each participant's audio+video is recorded separately as a local .webm file. No quality loss from compression.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎬</div>
+        <div class="feature-title">Combined Session Recording</div>
+        <div class="feature-desc">A composed canvas recording captures the full session layout — grid, spotlight, or picture-in-picture.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🌐</div>
+        <div class="feature-title">True Browser-Based WebRTC</div>
+        <div class="feature-desc">Low-latency peer-to-peer streaming via WebRTC. No plugin, no app install. Works in Chrome, Firefox, Edge.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎛️</div>
+        <div class="feature-title">Host Director Controls</div>
+        <div class="feature-desc">Manage layouts, admit/kick guests, control recording, mute participants, and monitor everyone's stream.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔗</div>
+        <div class="feature-title">Shareable Invite Link</div>
+        <div class="feature-desc">Share a simple link with guests. They join via browser, no login required. Waiting room approval flow included.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📐</div>
+        <div class="feature-title">Flexible Layouts</div>
+        <div class="feature-desc">Switch between Grid, Spotlight, Picture-in-Picture, and Side-by-Side layouts on the fly during recording.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">💬</div>
+        <div class="feature-title">Live Session Chat</div>
+        <div class="feature-desc">Built-in text chat for backchannel communication without interrupting the podcast flow.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📁</div>
+        <div class="feature-title">Recording Library</div>
+        <div class="feature-desc">All recordings saved to server with SQLite metadata. Download individual tracks or combined output anytime.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🟢</div>
+        <div class="feature-title">Local Green Room</div>
+        <div class="feature-desc">Test your mic, camera, and lighting before going live with dual-camera preview and audio monitoring.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="how" id="how">
+    <div class="how-inner">
+      <div class="section-label">Workflow</div>
+      <h2 class="section-title">How it Works</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <h3>Host Creates Session</h3>
+          <p>Enter your name, session title and get a unique session ID + shareable invite link</p>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <h3>Guests Join via Link</h3>
+          <p>Up to 3 guests click the invite link, enter their name, and wait in the virtual lobby</p>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <h3>Host Admits & Records</h3>
+          <p>Host admits guests from the waiting room, sets layout, then starts recording with one click</p>
+        </div>
+        <div class="step">
+          <div class="step-num">4</div>
+          <h3>Download Individual Tracks</h3>
+          <p>After session, all individual recordings and combined output are saved and available to download</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta">
+    <h2 id="cta-title">Login to Unlock Studio</h2>
+    <p id="cta-copy">// Sign in first, then host, join, and start recording.</p>
+    <div class="cta-btns">
+      <button class="btn btn-primary" id="cta-login-btn" onclick="openLoginModal()" style="font-size:1rem;padding:.85rem 2.5rem">
+        Login to Continue
+      </button>
+      <button class="btn btn-primary" id="cta-start-btn" onclick="openModal('host')" style="display:none;font-size:1rem;padding:.85rem 2.5rem">
+        🎙️ Start Your Studio
+      </button>
+      <button class="btn btn-outline" id="cta-join-btn" onclick="openModal('join')" style="display:none;font-size:1rem;padding:.85rem 2.5rem">
+        🔗 Join Session
+      </button>
+      <a href="/recordings" id="cta-recordings-link" class="btn btn-outline" style="display:none;font-size:1rem;padding:.85rem 2.5rem">
+        📁 Browse Recordings
+      </a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  Built with WebRTC + Socket.io + Node.js · <span>PodcastStudio</span> · Open Source
+</footer>
+
+<!-- Modal -->
+<div class="modal-overlay" id="login-modal">
+  <div class="modal">
+    <div class="modal-tabs">
+      <button class="modal-tab active" id="auth-tab-login" onclick="switchAuthMode('login')">Login</button>
+      <button class="modal-tab" id="auth-tab-signup" onclick="switchAuthMode('signup')">Create Account</button>
+    </div>
+    <h2 id="auth-title">Login to PodcastStudio</h2>
+    <p id="auth-subtitle">Sign in first, then choose to host or join a session.</p>
+    <div class="form-group" id="login-name-group" style="display:none">
+      <label>Full Name</label>
+      <input type="text" id="login-name" placeholder="e.g. Het Shah" maxlength="40"/>
+    </div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="login-email" placeholder="e.g. you@example.com" maxlength="120"/>
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="login-password" placeholder="Enter password" maxlength="120"/>
+    </div>
+    <div id="login-error" class="error-msg">Please fill in all login fields.</div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeLoginModal()">Cancel</button>
+      <button class="btn btn-primary" id="auth-submit-btn" onclick="submitAuth()">Login →</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-tabs">
+      <button class="modal-tab active" id="tab-host" onclick="switchTab('host')">🎙️ Host Session</button>
+      <button class="modal-tab" id="tab-join" onclick="switchTab('join')">🔗 Join Session</button>
+    </div>
+
+    <!-- Host Tab -->
+    <div id="panel-host">
+      <h2>Start a New Session</h2>
+      <p>You'll be the host and director of this session.</p>
+      <div class="form-group">
+        <label>Your Name</label>
+        <input type="text" id="host-name" placeholder="e.g. het Shah" maxlength="40"/>
+      </div>
+      <div class="form-group">
+        <label>Session Title (optional)</label>
+        <input type="text" id="host-title" placeholder="e.g. Tech Talk Episode 12" maxlength="80"/>
+      </div>
+      <div id="host-error" class="error-msg">Please enter your name.</div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="createSession()">Create Session →</button>
+      </div>
+    </div>
+
+    <!-- Join Tab -->
+    <div id="panel-join" style="display:none">
+      <h2>Join a Session</h2>
+      <p>Enter the session ID shared by your host.</p>
+      <div class="form-group">
+        <label>Your Name</label>
+        <input type="text" id="guest-name" placeholder="e.g. Ayush Mehta" maxlength="40"/>
+      </div>
+      <div class="form-group">
+        <label>Session ID</label>
+        <input type="text" id="session-code" placeholder="e.g. ABC12345" maxlength="8" style="text-transform:uppercase;letter-spacing:.15em"/>
+      </div>
+      <div id="join-error" class="error-msg">Please fill in all fields.</div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="joinSession()">Join Session →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let activeTab = 'host';
+let authMode = 'login';
+let loggedInUser = null;
+let pendingTabAfterLogin = null;
+let pendingJoinCode = null;
+
+const AUTH_USER_STORAGE_KEY = 'podcastStudioAuthUser';
+const AUTH_TOKEN_STORAGE_KEY = 'podcastStudioAuthToken';
+const loginModal = document.getElementById('login-modal');
+const studioModal = document.getElementById('modal');
+
+function getStoredUser() {
+  try {
+    const raw = localStorage.getItem(AUTH_USER_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function getStoredToken() {
+  const token = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+  return token && token.trim() ? token.trim() : null;
+}
+
+function setStoredAuth(user, token) {
+  localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));
+  localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+}
+
+function clearStoredAuth() {
+  localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+  localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+}
+
+function getAuthHeaders() {
+  const token = getStoredToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function showLoginError(message) {
+  const errorEl = document.getElementById('login-error');
+  errorEl.textContent = message;
+  errorEl.style.display = 'block';
+}
+
+function updateAuthUI() {
+  const isLoggedIn = Boolean(loggedInUser);
+
+  document.getElementById('nav-auth-btn').textContent = isLoggedIn ? 'Start Recording' : 'Login';
+  document.getElementById('nav-logout-btn').style.display = isLoggedIn ? 'inline-flex' : 'none';
+  document.getElementById('login-prompt').style.display = isLoggedIn ? 'none' : 'flex';
+  document.getElementById('studio-actions').style.display = isLoggedIn ? 'flex' : 'none';
+  document.getElementById('nav-recordings-link').style.display = isLoggedIn ? 'inline' : 'none';
+  document.getElementById('cta-login-btn').style.display = isLoggedIn ? 'none' : 'inline-flex';
+  document.getElementById('cta-start-btn').style.display = isLoggedIn ? 'inline-flex' : 'none';
+  document.getElementById('cta-join-btn').style.display = isLoggedIn ? 'inline-flex' : 'none';
+  document.getElementById('cta-recordings-link').style.display = isLoggedIn ? 'inline-flex' : 'none';
+
+  document.getElementById('cta-title').textContent = isLoggedIn ? 'Ready to Record?' : 'Login to Unlock Studio';
+  document.getElementById('cta-copy').textContent = isLoggedIn
+    ? '// You are signed in. Choose host or join to continue.'
+    : '// Sign in first, then host, join, and start recording.';
+
+  if (isLoggedIn) {
+    if (!document.getElementById('host-name').value.trim()) {
+      document.getElementById('host-name').value = loggedInUser.name;
+    }
+    if (!document.getElementById('guest-name').value.trim()) {
+      document.getElementById('guest-name').value = loggedInUser.name;
+    }
+  }
+}
+
+function handlePrimaryAction() {
+  if (loggedInUser) {
+    openModal('host');
+    return;
+  }
+  openLoginModal('login');
+}
+
+function switchAuthMode(mode) {
+  authMode = mode;
+  const isSignup = mode === 'signup';
+
+  document.getElementById('auth-tab-login').classList.toggle('active', !isSignup);
+  document.getElementById('auth-tab-signup').classList.toggle('active', isSignup);
+  document.getElementById('login-name-group').style.display = isSignup ? 'block' : 'none';
+  document.getElementById('auth-title').textContent = isSignup ? 'Create Your Account' : 'Login to PodcastStudio';
+  document.getElementById('auth-subtitle').textContent = isSignup
+    ? 'Create account with full name, email and password.'
+    : 'Sign in with your email and password.';
+  document.getElementById('auth-submit-btn').textContent = isSignup ? 'Create Account →' : 'Login →';
+  document.getElementById('login-error').style.display = 'none';
+}
+
+function openLoginModal(mode = 'login') {
+  loginModal.classList.add('open');
+  switchAuthMode(mode);
+}
+
+function closeLoginModal() {
+  loginModal.classList.remove('open');
+  document.getElementById('login-error').style.display = 'none';
+}
+
+function completePendingAction() {
+  if (pendingJoinCode) {
+    const joinCode = pendingJoinCode;
+    pendingJoinCode = null;
+    pendingTabAfterLogin = null;
+    openModal('join');
+    document.getElementById('session-code').value = joinCode;
+    return;
+  }
+
+  if (pendingTabAfterLogin) {
+    const tab = pendingTabAfterLogin;
+    pendingTabAfterLogin = null;
+    openModal(tab);
+  }
+}
+
+function submitAuth() {
+  if (authMode === 'signup') {
+    signup();
+    return;
+  }
+  login();
+}
+
+async function login() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value.trim();
+
+  if (!email || !password) {
+    showLoginError('Please fill email and password to login.');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      showLoginError(data.error || 'Login failed. Please check your credentials.');
+      return;
+    }
+
+    loggedInUser = data.user;
+    setStoredAuth(data.user, data.accessToken);
+    localStorage.setItem('myName', data.user.name);
+
+    closeLoginModal();
+    updateAuthUI();
+    completePendingAction();
+  } catch (err) {
+    showLoginError('Could not reach auth server. Try again.');
+  }
+}
+
+async function signup() {
+  const name = document.getElementById('login-name').value.trim();
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value.trim();
+
+  if (!name || !email || !password) {
+    showLoginError('Please fill name, email and password to create an account.');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      showLoginError(data.error || 'Sign up failed.');
+      return;
+    }
+
+    if (data.needsEmailConfirmation) {
+      showLoginError('Account created. Please confirm your email, then login.');
+      return;
+    }
+
+    loggedInUser = data.user;
+    setStoredAuth(data.user, data.accessToken);
+    localStorage.setItem('myName', data.user.name);
+
+    closeLoginModal();
+    updateAuthUI();
+    completePendingAction();
+  } catch (err) {
+    showLoginError('Could not reach auth server. Try again.');
+  }
+}
+
+async function hydrateAuthFromServer() {
+  try {
+    const res = await fetch('/api/auth/me', { headers: getAuthHeaders() });
+    if (!res.ok) {
+      loggedInUser = null;
+      clearStoredAuth();
+      return;
+    }
+
+    const data = await res.json();
+    if (!data?.user || !data?.accessToken) {
+      loggedInUser = null;
+      clearStoredAuth();
+      return;
+    }
+
+    loggedInUser = data.user;
+    setStoredAuth(data.user, data.accessToken);
+    localStorage.setItem('myName', data.user.name);
+  } catch (err) {
+    loggedInUser = null;
+    clearStoredAuth();
+  }
+}
+
+async function logout() {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST', headers: getAuthHeaders() });
+  } catch (err) {
+    // Ignore network errors and clear local state anyway.
+  }
+
+  loggedInUser = null;
+  clearStoredAuth();
+  localStorage.removeItem('myName');
+  localStorage.removeItem('myRole');
+  closeModal();
+  closeLoginModal();
+  updateAuthUI();
+}
+
+function openModal(tab) {
+  if (!loggedInUser) {
+    pendingTabAfterLogin = tab || 'host';
+    openLoginModal('login');
+    return;
+  }
+
+  studioModal.classList.add('open');
+  if (tab) switchTab(tab);
+
+  if (!document.getElementById('host-name').value.trim()) {
+    document.getElementById('host-name').value = loggedInUser.name;
+  }
+  if (!document.getElementById('guest-name').value.trim()) {
+    document.getElementById('guest-name').value = loggedInUser.name;
+  }
+}
+function closeModal() {
+  studioModal.classList.remove('open');
+}
+studioModal.addEventListener('click', e => {
+  if (e.target === studioModal) closeModal();
+});
+loginModal.addEventListener('click', e => {
+  if (e.target === loginModal) closeLoginModal();
+});
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.getElementById('tab-host').classList.toggle('active', tab === 'host');
+  document.getElementById('tab-join').classList.toggle('active', tab === 'join');
+  document.getElementById('panel-host').style.display = tab === 'host' ? 'block' : 'none';
+  document.getElementById('panel-join').style.display = tab === 'join' ? 'block' : 'none';
+}
+
+async function createSession() {
+  if (!loggedInUser) {
+    pendingTabAfterLogin = 'host';
+    openLoginModal('login');
+    return;
+  }
+
+  const title = document.getElementById('host-title').value.trim();
+  document.getElementById('host-error').style.display = 'none';
+  try {
+    const res = await fetch('/api/sessions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders()
+      },
+      body: JSON.stringify({ title })
+    });
+    const data = await res.json();
+    if (data.sessionId) {
+      localStorage.setItem('myName', loggedInUser.name);
+      localStorage.setItem('myRole', 'host');
+      window.location.href = `/session/${data.sessionId}`;
+      return;
+    }
+
+    alert(data.error || 'Failed to create session. Please login again.');
+  } catch(e) {
+    alert('Failed to create session. Is the server running?');
+  }
+}
+
+function joinSession() {
+  if (!loggedInUser) {
+    pendingTabAfterLogin = 'join';
+    openLoginModal('login');
+    return;
+  }
+
+  const code = document.getElementById('session-code').value.trim().toUpperCase();
+  if (!code) {
+    document.getElementById('join-error').style.display = 'block';
+    return;
+  }
+  document.getElementById('join-error').style.display = 'none';
+  localStorage.setItem('myName', loggedInUser.name);
+  localStorage.setItem('myRole', 'guest');
+  window.location.href = `/join/${code}`;
+}
+
+// Handle enter key
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeModal();
+    closeLoginModal();
+  }
+
+  if (e.key === 'Enter' && loginModal.classList.contains('open')) {
+    submitAuth();
+    return;
+  }
+
+  if (e.key === 'Enter' && studioModal.classList.contains('open')) {
+    if (activeTab === 'host') createSession();
+    else joinSession();
+  }
+});
+
+(async function bootstrapAuth() {
+  loggedInUser = getStoredUser();
+  updateAuthUI();
+  await hydrateAuthFromServer();
+  updateAuthUI();
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('login')) {
+    openLoginModal('login');
+  }
+  if (params.get('join')) {
+    const joinCode = params.get('join').toUpperCase();
+    if (loggedInUser) {
+      openModal('join');
+      document.getElementById('session-code').value = joinCode;
+    } else {
+      pendingTabAfterLogin = 'join';
+      pendingJoinCode = joinCode;
+      openLoginModal('login');
+    }
+  }
+})();
+</script>
+</body>
+</html>
+
