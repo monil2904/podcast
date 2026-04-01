@@ -1,4 +1,4 @@
-!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
@@ -199,6 +199,41 @@ footer{
   font-size:.8rem;color:var(--muted);font-family:'DM Mono',monospace;font-weight:300;
 }
 footer span{color:var(--accent)}
+
+@media (max-width:900px){
+  nav{padding:1rem 1.25rem;flex-wrap:wrap;gap:.75rem}
+  .nav-links{gap:.75rem;flex-wrap:wrap;justify-content:flex-end}
+  .nav-links a{font-size:.75rem}
+  .hero{min-height:auto;padding:7rem 1.25rem 3rem}
+  .hero h1{font-size:clamp(2.25rem,12vw,3.5rem);line-height:1}
+  .hero p{font-size:1rem;max-width:100%}
+  .hero-stat{gap:1.25rem;margin-top:2rem}
+  .stat-num{font-size:1.4rem}
+  .studio-preview{padding:0 1rem 4rem}
+  .preview-grid{aspect-ratio:4/3}
+  .features{padding:4rem 1rem}
+  .features-grid{grid-template-columns:1fr}
+  .how{padding:4rem 1rem}
+  .steps{grid-template-columns:1fr;gap:1rem}
+  .step{padding:1.25rem .5rem}
+  .cta{padding:4rem 1rem}
+  .modal{max-width:calc(100vw - 1.5rem);padding:1.5rem}
+  .modal-actions{flex-direction:column}
+}
+
+@media (max-width:600px){
+  .logo{font-size:1rem}
+  .nav-links{width:100%;justify-content:flex-start}
+  .nav-links a{display:none}
+  .btn{padding:.55rem .9rem;font-size:.78rem}
+  .hero-badge{font-size:.65rem}
+  .hero-actions,.cta-btns{flex-direction:column;align-items:stretch}
+  .hero-actions .btn,.cta-btns .btn{width:100%;justify-content:center}
+  .participant-label{font-size:.65rem;padding:.2rem .45rem;left:.45rem;bottom:.45rem}
+  .preview-controls{gap:.5rem;padding:.75rem}
+  .ctrl-btn{width:36px;height:36px;font-size:.85rem}
+  footer{padding:1.5rem 1rem}
+}
 </style>
 </head>
 <body>
@@ -210,8 +245,9 @@ footer span{color:var(--accent)}
   <div class="nav-links">
     <a href="#features">Features</a>
     <a href="#how">How it works</a>
-    <a href="/recordings">Recordings</a>
-    <button class="btn btn-outline" style="padding:.5rem 1rem" onclick="openModal('login')">Host Login</button>
+    <a href="/recordings" id="nav-recordings-link" style="display:none">Recordings</a>
+    <button class="btn btn-primary" id="nav-auth-btn" onclick="handlePrimaryAction()">Login</button>
+    <button class="btn btn-outline" id="nav-logout-btn" onclick="logout()" style="display:none">Logout</button>
   </div>
 </nav>
 
@@ -221,7 +257,12 @@ footer span{color:var(--accent)}
       <div class="hero-badge">🎙️ Live Remote Recording</div>
       <h1>Record Podcasts<br/>With Anyone,<br/><span>Anywhere.</span></h1>
       <p>Professional-grade browser-based studio. No downloads, no plugins. Up to 4 guests with individual track recording.</p>
-      <div class="hero-actions">
+      <div class="hero-actions" id="login-prompt">
+        <button class="btn btn-primary" onclick="openLoginModal()" style="font-size:1rem;padding:.85rem 2rem">
+          Login to Continue
+        </button>
+      </div>
+      <div class="hero-actions" id="studio-actions" style="display:none">
         <button class="btn btn-primary" onclick="openModal('host')" style="font-size:1rem;padding:.85rem 2rem">
           🎙️ Start a Session
         </button>
@@ -357,13 +398,19 @@ footer span{color:var(--accent)}
   </section>
 
   <section class="cta">
-    <h2>Ready to Record?</h2>
-    <p>// Free. No account needed. Works in your browser right now.</p>
+    <h2 id="cta-title">Login to Unlock Studio</h2>
+    <p id="cta-copy">// Sign in first, then host, join, and start recording.</p>
     <div class="cta-btns">
-      <button class="btn btn-primary" onclick="openModal('host')" style="font-size:1rem;padding:.85rem 2.5rem">
+      <button class="btn btn-primary" id="cta-login-btn" onclick="openLoginModal()" style="font-size:1rem;padding:.85rem 2.5rem">
+        Login to Continue
+      </button>
+      <button class="btn btn-primary" id="cta-start-btn" onclick="openModal('host')" style="display:none;font-size:1rem;padding:.85rem 2.5rem">
         🎙️ Start Your Studio
       </button>
-      <a href="/recordings" class="btn btn-outline" style="font-size:1rem;padding:.85rem 2.5rem">
+      <button class="btn btn-outline" id="cta-join-btn" onclick="openModal('join')" style="display:none;font-size:1rem;padding:.85rem 2.5rem">
+        🔗 Join Session
+      </button>
+      <a href="/recordings" id="cta-recordings-link" class="btn btn-outline" style="display:none;font-size:1rem;padding:.85rem 2.5rem">
         📁 Browse Recordings
       </a>
     </div>
@@ -375,31 +422,39 @@ footer span{color:var(--accent)}
 </footer>
 
 <!-- Modal -->
+<div class="modal-overlay" id="login-modal">
+  <div class="modal">
+    <div class="modal-tabs">
+      <button class="modal-tab active" id="auth-tab-login" onclick="switchAuthMode('login')">Login</button>
+      <button class="modal-tab" id="auth-tab-signup" onclick="switchAuthMode('signup')">Create Account</button>
+    </div>
+    <h2 id="auth-title">Login to PodcastStudio</h2>
+    <p id="auth-subtitle">Sign in first, then choose to host or join a session.</p>
+    <div class="form-group" id="login-name-group" style="display:none">
+      <label>Full Name</label>
+      <input type="text" id="login-name" placeholder="e.g. Het Shah" maxlength="40"/>
+    </div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="login-email" placeholder="e.g. you@example.com" maxlength="120"/>
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="login-password" placeholder="Enter password" maxlength="120"/>
+    </div>
+    <div id="login-error" class="error-msg">Please fill in all login fields.</div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeLoginModal()">Cancel</button>
+      <button class="btn btn-primary" id="auth-submit-btn" onclick="submitAuth()">Login →</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal">
   <div class="modal">
     <div class="modal-tabs">
       <button class="modal-tab active" id="tab-host" onclick="switchTab('host')">🎙️ Host Session</button>
       <button class="modal-tab" id="tab-join" onclick="switchTab('join')">🔗 Join Session</button>
-    </div>
-
-    <!-- Login Tab -->
-    <div id="panel-login" style="display:none">
-      <h2 id="auth-title">Welcome</h2>
-      <p id="auth-subtitle">Log in or sign up securely.</p>
-      <div class="form-group">
-        <label>Email</label>
-        <input type="email" id="login-email" placeholder="you@example.com"/>
-      </div>
-      <div class="form-group">
-        <label>Password</label>
-        <input type="password" id="login-password" placeholder="••••••••"/>
-      </div>
-      <div id="login-error" class="error-msg">Invalid login credentials.</div>
-      <div id="login-success" class="error-msg" style="background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:var(--green)"></div>
-      <div class="modal-actions">
-        <button class="btn btn-outline" onclick="signupHost()">Sign Up</button>
-        <button class="btn btn-primary" onclick="loginHost()">Log In →</button>
-      </div>
     </div>
 
     <!-- Host Tab -->
@@ -416,7 +471,7 @@ footer span{color:var(--accent)}
       </div>
       <div id="host-error" class="error-msg">Please enter your name.</div>
       <div class="modal-actions">
-        <button class="btn btn-outline" onclick="logoutHost()">Logout</button>
+        <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
         <button class="btn btn-primary" onclick="createSession()">Create Session →</button>
       </div>
     </div>
@@ -444,173 +499,377 @@ footer span{color:var(--accent)}
 
 <script>
 let activeTab = 'host';
-let intendedTab = 'host';
+let authMode = 'login';
+let loggedInUser = null;
+let pendingTabAfterLogin = null;
+let pendingJoinCode = null;
 
-function openModal(tab) {
-  document.getElementById('modal').classList.add('open');
-  if (tab && tab !== 'login') intendedTab = tab;
-  
-  const hasToken = localStorage.getItem('token');
-  if (!hasToken) {
-    switchTab('login');
-  } else {
-    switchTab(tab || intendedTab);
+const AUTH_USER_STORAGE_KEY = 'podcastStudioAuthUser';
+const AUTH_TOKEN_STORAGE_KEY = 'podcastStudioAuthToken';
+const loginModal = document.getElementById('login-modal');
+const studioModal = document.getElementById('modal');
+
+function getStoredUser() {
+  try {
+    const raw = localStorage.getItem(AUTH_USER_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    return null;
   }
 }
 
-function closeModal() {
-  document.getElementById('modal').classList.remove('open');
+function getStoredToken() {
+  const token = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+  return token && token.trim() ? token.trim() : null;
 }
-document.getElementById('modal').addEventListener('click', e => {
-  if (e.target === document.getElementById('modal')) closeModal();
+
+function setStoredAuth(user, token) {
+  localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));
+  localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+}
+
+function clearStoredAuth() {
+  localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+  localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+}
+
+function getAuthHeaders() {
+  const token = getStoredToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function showLoginError(message) {
+  const errorEl = document.getElementById('login-error');
+  errorEl.textContent = message;
+  errorEl.style.display = 'block';
+}
+
+function updateAuthUI() {
+  const isLoggedIn = Boolean(loggedInUser);
+
+  document.getElementById('nav-auth-btn').textContent = isLoggedIn ? 'Start Recording' : 'Login';
+  document.getElementById('nav-logout-btn').style.display = isLoggedIn ? 'inline-flex' : 'none';
+  document.getElementById('login-prompt').style.display = isLoggedIn ? 'none' : 'flex';
+  document.getElementById('studio-actions').style.display = isLoggedIn ? 'flex' : 'none';
+  document.getElementById('nav-recordings-link').style.display = isLoggedIn ? 'inline' : 'none';
+  document.getElementById('cta-login-btn').style.display = isLoggedIn ? 'none' : 'inline-flex';
+  document.getElementById('cta-start-btn').style.display = isLoggedIn ? 'inline-flex' : 'none';
+  document.getElementById('cta-join-btn').style.display = isLoggedIn ? 'inline-flex' : 'none';
+  document.getElementById('cta-recordings-link').style.display = isLoggedIn ? 'inline-flex' : 'none';
+
+  document.getElementById('cta-title').textContent = isLoggedIn ? 'Ready to Record?' : 'Login to Unlock Studio';
+  document.getElementById('cta-copy').textContent = isLoggedIn
+    ? '// You are signed in. Choose host or join to continue.'
+    : '// Sign in first, then host, join, and start recording.';
+
+  if (isLoggedIn) {
+    if (!document.getElementById('host-name').value.trim()) {
+      document.getElementById('host-name').value = loggedInUser.name;
+    }
+    if (!document.getElementById('guest-name').value.trim()) {
+      document.getElementById('guest-name').value = loggedInUser.name;
+    }
+  }
+}
+
+function handlePrimaryAction() {
+  if (loggedInUser) {
+    openModal('host');
+    return;
+  }
+  openLoginModal('login');
+}
+
+function switchAuthMode(mode) {
+  authMode = mode;
+  const isSignup = mode === 'signup';
+
+  document.getElementById('auth-tab-login').classList.toggle('active', !isSignup);
+  document.getElementById('auth-tab-signup').classList.toggle('active', isSignup);
+  document.getElementById('login-name-group').style.display = isSignup ? 'block' : 'none';
+  document.getElementById('auth-title').textContent = isSignup ? 'Create Your Account' : 'Login to PodcastStudio';
+  document.getElementById('auth-subtitle').textContent = isSignup
+    ? 'Create account with full name, email and password.'
+    : 'Sign in with your email and password.';
+  document.getElementById('auth-submit-btn').textContent = isSignup ? 'Create Account →' : 'Login →';
+  document.getElementById('login-error').style.display = 'none';
+}
+
+function openLoginModal(mode = 'login') {
+  loginModal.classList.add('open');
+  switchAuthMode(mode);
+}
+
+function closeLoginModal() {
+  loginModal.classList.remove('open');
+  document.getElementById('login-error').style.display = 'none';
+}
+
+function completePendingAction() {
+  if (pendingJoinCode) {
+    const joinCode = pendingJoinCode;
+    pendingJoinCode = null;
+    pendingTabAfterLogin = null;
+    openModal('join');
+    document.getElementById('session-code').value = joinCode;
+    return;
+  }
+
+  if (pendingTabAfterLogin) {
+    const tab = pendingTabAfterLogin;
+    pendingTabAfterLogin = null;
+    openModal(tab);
+  }
+}
+
+function submitAuth() {
+  if (authMode === 'signup') {
+    signup();
+    return;
+  }
+  login();
+}
+
+async function login() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value.trim();
+
+  if (!email || !password) {
+    showLoginError('Please fill email and password to login.');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      showLoginError(data.error || 'Login failed. Please check your credentials.');
+      return;
+    }
+
+    loggedInUser = data.user;
+    setStoredAuth(data.user, data.accessToken);
+    localStorage.setItem('myName', data.user.name);
+
+    closeLoginModal();
+    updateAuthUI();
+    completePendingAction();
+  } catch (err) {
+    showLoginError('Could not reach auth server. Try again.');
+  }
+}
+
+async function signup() {
+  const name = document.getElementById('login-name').value.trim();
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value.trim();
+
+  if (!name || !email || !password) {
+    showLoginError('Please fill name, email and password to create an account.');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      showLoginError(data.error || 'Sign up failed.');
+      return;
+    }
+
+    if (data.needsEmailConfirmation) {
+      showLoginError('Account created. Please confirm your email, then login.');
+      return;
+    }
+
+    loggedInUser = data.user;
+    setStoredAuth(data.user, data.accessToken);
+    localStorage.setItem('myName', data.user.name);
+
+    closeLoginModal();
+    updateAuthUI();
+    completePendingAction();
+  } catch (err) {
+    showLoginError('Could not reach auth server. Try again.');
+  }
+}
+
+async function hydrateAuthFromServer() {
+  try {
+    const res = await fetch('/api/auth/me', { headers: getAuthHeaders() });
+    if (!res.ok) {
+      loggedInUser = null;
+      clearStoredAuth();
+      return;
+    }
+
+    const data = await res.json();
+    if (!data?.user || !data?.accessToken) {
+      loggedInUser = null;
+      clearStoredAuth();
+      return;
+    }
+
+    loggedInUser = data.user;
+    setStoredAuth(data.user, data.accessToken);
+    localStorage.setItem('myName', data.user.name);
+  } catch (err) {
+    loggedInUser = null;
+    clearStoredAuth();
+  }
+}
+
+async function logout() {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST', headers: getAuthHeaders() });
+  } catch (err) {
+    // Ignore network errors and clear local state anyway.
+  }
+
+  loggedInUser = null;
+  clearStoredAuth();
+  localStorage.removeItem('myName');
+  localStorage.removeItem('myRole');
+  closeModal();
+  closeLoginModal();
+  updateAuthUI();
+}
+
+function openModal(tab) {
+  if (!loggedInUser) {
+    pendingTabAfterLogin = tab || 'host';
+    openLoginModal('login');
+    return;
+  }
+
+  studioModal.classList.add('open');
+  if (tab) switchTab(tab);
+
+  if (!document.getElementById('host-name').value.trim()) {
+    document.getElementById('host-name').value = loggedInUser.name;
+  }
+  if (!document.getElementById('guest-name').value.trim()) {
+    document.getElementById('guest-name').value = loggedInUser.name;
+  }
+}
+function closeModal() {
+  studioModal.classList.remove('open');
+}
+studioModal.addEventListener('click', e => {
+  if (e.target === studioModal) closeModal();
+});
+loginModal.addEventListener('click', e => {
+  if (e.target === loginModal) closeLoginModal();
 });
 
 function switchTab(tab) {
-  const hasToken = localStorage.getItem('token');
-  if (!hasToken && tab !== 'login') {
-    intendedTab = tab;
-    tab = 'login';
-  } else if (hasToken && tab === 'login') {
-    tab = intendedTab || 'host';
-  }
-
   activeTab = tab;
   document.getElementById('tab-host').classList.toggle('active', tab === 'host');
   document.getElementById('tab-join').classList.toggle('active', tab === 'join');
   document.getElementById('panel-host').style.display = tab === 'host' ? 'block' : 'none';
-  document.getElementById('panel-login').style.display = tab === 'login' ? 'block' : 'none';
   document.getElementById('panel-join').style.display = tab === 'join' ? 'block' : 'none';
 }
 
-async function loginHost() {
-  const email = document.getElementById('login-email').value.trim();
-  const password = document.getElementById('login-password').value;
-  if (!email || !password) {
-    document.getElementById('login-error').textContent = 'Please fill in all fields.';
-    document.getElementById('login-error').style.display = 'block';
-    return;
-  }
-  
-  try {
-    const res = await fetch('/api/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    const data = await res.json();
-    if (data.token) {
-      localStorage.setItem('token', data.token);
-      document.getElementById('login-error').style.display = 'none';
-      switchTab(intendedTab || 'host');
-    } else {
-      document.getElementById('login-error').textContent = data.error || 'Login failed.';
-      document.getElementById('login-error').style.display = 'block';
-    }
-  } catch(e) {
-    document.getElementById('login-error').textContent = 'Server error.';
-    document.getElementById('login-error').style.display = 'block';
-  }
-}
-
-async function signupHost() {
-  const email = document.getElementById('login-email').value.trim();
-  const password = document.getElementById('login-password').value;
-  document.getElementById('login-success').style.display = 'none';
-  if (!email || !password) {
-    document.getElementById('login-error').textContent = 'Please fill in all fields.';
-    document.getElementById('login-error').style.display = 'block';
-    return;
-  }
-  
-  try {
-    const res = await fetch('/api/signup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    const data = await res.json();
-    if (res.ok) {
-      if (data.token) {
-        localStorage.setItem('token', data.token);
-        document.getElementById('login-error').style.display = 'none';
-        switchTab(intendedTab || 'host');
-      } else {
-        document.getElementById('login-error').style.display = 'none';
-        document.getElementById('login-success').textContent = data.message || 'Signup successful!';
-        document.getElementById('login-success').style.display = 'block';
-      }
-    } else {
-      document.getElementById('login-error').textContent = data.error || 'Signup failed.';
-      document.getElementById('login-error').style.display = 'block';
-    }
-  } catch(e) {
-    document.getElementById('login-error').textContent = 'Server error.';
-    document.getElementById('login-error').style.display = 'block';
-  }
-}
-
-function logoutHost() {
-  localStorage.removeItem('token');
-  switchTab('login');
-}
-
 async function createSession() {
-  const name = document.getElementById('host-name').value.trim();
-  const title = document.getElementById('host-title').value.trim();
-  if (!name) {
-    document.getElementById('host-error').style.display = 'block';
+  if (!loggedInUser) {
+    pendingTabAfterLogin = 'host';
+    openLoginModal('login');
     return;
   }
+
+  const title = document.getElementById('host-title').value.trim();
   document.getElementById('host-error').style.display = 'none';
   try {
     const res = await fetch('/api/sessions', {
       method: 'POST',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        ...getAuthHeaders()
       },
-      body: JSON.stringify({ hostName: name, title })
+      body: JSON.stringify({ title })
     });
     const data = await res.json();
     if (data.sessionId) {
-      localStorage.setItem('myName', name);
+      localStorage.setItem('myName', loggedInUser.name);
       localStorage.setItem('myRole', 'host');
       window.location.href = `/session/${data.sessionId}`;
+      return;
     }
+
+    alert(data.error || 'Failed to create session. Please login again.');
   } catch(e) {
     alert('Failed to create session. Is the server running?');
   }
 }
 
 function joinSession() {
-  const name = document.getElementById('guest-name').value.trim();
+  if (!loggedInUser) {
+    pendingTabAfterLogin = 'join';
+    openLoginModal('login');
+    return;
+  }
+
   const code = document.getElementById('session-code').value.trim().toUpperCase();
-  if (!name || !code) {
+  if (!code) {
     document.getElementById('join-error').style.display = 'block';
     return;
   }
   document.getElementById('join-error').style.display = 'none';
-  localStorage.setItem('myName', name);
+  localStorage.setItem('myName', loggedInUser.name);
   localStorage.setItem('myRole', 'guest');
-  window.location.href = `/join/${code}?name=${encodeURIComponent(name)}`;
+  window.location.href = `/join/${code}`;
 }
 
 // Handle enter key
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeModal();
-  if (e.key === 'Enter' && document.getElementById('modal').classList.contains('open')) {
+  if (e.key === 'Escape') {
+    closeModal();
+    closeLoginModal();
+  }
+
+  if (e.key === 'Enter' && loginModal.classList.contains('open')) {
+    submitAuth();
+    return;
+  }
+
+  if (e.key === 'Enter' && studioModal.classList.contains('open')) {
     if (activeTab === 'host') createSession();
-    else if (activeTab === 'join') joinSession();
-    else if (activeTab === 'login') loginHost();
+    else joinSession();
   }
 });
 
-// Check for invite link
-const params = new URLSearchParams(window.location.search);
-if (params.get('join')) {
-  openModal('join');
-  document.getElementById('session-code').value = params.get('join').toUpperCase();
-}
+(async function bootstrapAuth() {
+  loggedInUser = getStoredUser();
+  updateAuthUI();
+  await hydrateAuthFromServer();
+  updateAuthUI();
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('login')) {
+    openLoginModal('login');
+  }
+  if (params.get('join')) {
+    const joinCode = params.get('join').toUpperCase();
+    if (loggedInUser) {
+      openModal('join');
+      document.getElementById('session-code').value = joinCode;
+    } else {
+      pendingTabAfterLogin = 'join';
+      pendingJoinCode = joinCode;
+      openLoginModal('login');
+    }
+  }
+})();
 </script>
 </body>
 </html>
