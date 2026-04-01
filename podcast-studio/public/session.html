@@ -942,6 +942,10 @@
       <div class="ctrl" id="ctrl-cam" onclick="toggleCam()" title="Camera On/Off">📷</div>
       <div class="ctrl-label">Camera</div>
     </div>
+    <div class="ctrl-wrap" id="wrap-combined-rec" style="display:none">
+      <div class="ctrl off" id="ctrl-combined" onclick="toggleCombinedRec()" title="Record Combined Screen Layout">💻</div>
+      <div class="ctrl-label" id="lbl-combined">Scrn: OFF</div>
+    </div>
     <div class="ctrl-wrap">
       <div class="ctrl-rec" id="ctrl-rec" onclick="toggleRecording()" title="Start/Stop Recording">⏺</div>
       <div class="ctrl-label" id="rec-label">Start Rec</div>
@@ -962,7 +966,9 @@
   <script>
     // ── STATE ──────────────────────────────────────────────────
     const sessionId = window.location.pathname.split('/').pop();
-    const myName = localStorage.getItem('myName') || 'Host';
+    const AUTH_USER_STORAGE_KEY = 'podcastStudioAuthUser';
+    const AUTH_TOKEN_STORAGE_KEY = 'podcastStudioAuthToken';
+    let myName = localStorage.getItem('myName') || 'Host';
     let socket, myStream, localRecorder;
     let peers = {}; // socketId -> RTCPeerConnection
     let remoteStreams = {}; // socketId -> MediaStream
@@ -974,6 +980,11 @@
     let timerInterval = null, timerSeconds = 0;
     let recordingChunks = {};
     let participantNames = {}; // socketId -> name
+    let participantUserIds = {}; // socketId -> auth user id
+    let recordCombinedLayout = false;
+    let myRole = localStorage.getItem('myRole') || 'guest';
+    let authToken = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || '';
+    let authUserId = '';
 
     const ICE_CONFIG = {
       iceServers: [
@@ -997,10 +1008,51 @@
       ]
     };
 
+    function getAuthHeaders() {
+      return authToken ? { Authorization: `Bearer ${authToken}` } : {};
+    }
+
+    function redirectToLogin() {
+      localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+      localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+      localStorage.removeItem('myName');
+      localStorage.removeItem('myRole');
+      window.location.href = '/?login=1';
+    }
+
+    async function ensureAuthenticated() {
+      try {
+        const res = await fetch('/api/auth/me', { headers: getAuthHeaders() });
+        if (!res.ok) {
+          redirectToLogin();
+          return false;
+        }
+
+        const data = await res.json();
+        if (!data?.user || !data?.accessToken) {
+          redirectToLogin();
+          return false;
+        }
+
+        authToken = data.accessToken;
+        authUserId = data.user.id;
+        myName = data.user.name;
+        myRole = 'host';
+
+        localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(data.user));
+        localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, authToken);
+        localStorage.setItem('myName', myName);
+        localStorage.setItem('myRole', 'host');
+
+        return true;
+      } catch (err) {
+        redirectToLogin();
+        return false;
+      }
+    }
+
     // ── INIT ───────────────────────────────────────────────────
     document.getElementById('session-id-display').textContent = sessionId;
-    document.getElementById('host-name-display').textContent = myName;
-    participantNames['self'] = myName;
 
     const inviteUrl = `${window.location.origin}/join/${sessionId}`;
     document.getElementById('invite-link-text').textContent = inviteUrl;
@@ -1017,14 +1069,29 @@
         addVideoTile('self', myName, null, false);
         initSocket();
       }
+      if (myRole === 'host') {
+        const wrapStr = document.getElementById('wrap-combined-rec');
+        if(wrapStr) wrapStr.style.display = 'flex';
+      }
+    }
+
+    function toggleCombinedRec() {
+      recordCombinedLayout = !recordCombinedLayout;
+      document.getElementById('ctrl-combined').classList.toggle('off', !recordCombinedLayout);
+      document.getElementById('lbl-combined').textContent = 'Scrn: ' + (recordCombinedLayout ? 'ON' : 'OFF');
+      toast('Combined Layout Recording ' + (recordCombinedLayout ? 'ON' : 'OFF'));
     }
 
     // ── SOCKET ─────────────────────────────────────────────────
     function initSocket() {
-      socket = io();
+      socket = io({ auth: { token: authToken } });
 
       socket.on('connect', () => {
-        socket.emit('host:join', { sessionId, name: myName });
+        socket.emit('host:join', { sessionId });
+      });
+
+      socket.on('connect_error', () => {
+        redirectToLogin();
       });
 
       socket.on('session:joined', ({ participants }) => {
@@ -1272,7 +1339,7 @@
 
       // Combined session recording
       try {
-        if (confirm("Would you like to record the combined screen layout as well? (Click Cancel to only record individual feeds)")) {
+        if (myRole === 'host' && recordCombinedLayout) {
           displayStream = await navigator.mediaDevices.getDisplayMedia({
             video: { displaySurface: "browser" },
             audio: true
@@ -1285,8 +1352,6 @@
           displayStream.getVideoTracks()[0].onended = () => {
             if (isRecording) toggleRecording();
           };
-        } else {
-          toast("Combined recording skipped.");
         }
       } catch (err) {
         console.warn("Could not capture screen for combined recording:", err);
@@ -1331,7 +1396,7 @@
         if (displayStream) displayStream.getTracks().forEach(t => t.stop());
         const blob = new Blob(recordingChunks['combined'] || [], { type: 'video/webm' });
         if (blob.size > 0) {
-          await uploadRecording(blob, 'combined', 'Combined Session', 'combined');
+          await uploadRecording(blob, authUserId || 'self', myName, 'combined');
           downloadRecording(blob, `Combined_${sessionId}.webm`);
         }
       }
@@ -1345,7 +1410,8 @@
         const blob = new Blob(recordingChunks[id] || [], { type: 'video/webm' });
         if (blob.size > 0) {
           const name = id === 'self' ? myName : (participantNames[id] || 'Guest');
-          await uploadRecording(blob, id, name, 'individual');
+          const participantId = id === 'self' ? (authUserId || 'self') : (participantUserIds[id] || id);
+          await uploadRecording(blob, participantId, name, 'individual');
           downloadRecording(blob, `${name.replace(/\s+/g, '_')}_${sessionId}.webm`);
         }
       }
@@ -1364,7 +1430,11 @@
       fd.append('participantName', participantName);
       fd.append('type', type);
       try {
-        const res = await fetch('/api/recordings/upload', { method: 'POST', body: fd });
+        const res = await fetch('/api/recordings/upload', {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: fd
+        });
         return await res.json();
       } catch (e) {
         console.error('Upload failed:', e);
@@ -1449,6 +1519,7 @@
       list.innerHTML = '';
       Object.values(participants).forEach(p => {
         participantNames[p.socketId] = p.name;
+        participantUserIds[p.socketId] = p.userId || p.socketId;
         const item = document.createElement('div');
         item.className = 'participant-item';
         item.id = `p-${p.socketId}`;
@@ -1632,7 +1703,16 @@
     }
 
     // Start
-    init();
+    (async () => {
+      const ok = await ensureAuthenticated();
+      if (!ok) return;
+
+      document.getElementById('host-name-display').textContent = myName;
+      participantNames['self'] = myName;
+      participantUserIds['self'] = authUserId || 'self';
+
+      init();
+    })();
   </script>
 </body>
 

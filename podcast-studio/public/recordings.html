@@ -89,6 +89,23 @@
             color: var(--accent)
         }
 
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem
+        }
+
+        .user-pill {
+            padding: .35rem .75rem;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            font-size: .7rem;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: var(--muted);
+            font-family: 'DM Mono', monospace
+        }
+
         main {
             flex: 1;
             max-width: 900px;
@@ -424,7 +441,10 @@
         <a href="/" class="logo">
             <div class="logo-dot"></div>PodcastStudio
         </a>
-        <a href="/" class="back-link">← Back to Studio</a>
+        <div class="nav-right">
+            <div class="user-pill" id="user-pill">LOGIN REQUIRED</div>
+            <a href="/" class="back-link">← Back to Studio</a>
+        </div>
     </nav>
 
     <main>
@@ -447,9 +467,79 @@
     </main>
 
     <script>
-        async function loadSessions() {
+        const AUTH_USER_STORAGE_KEY = 'podcastStudioAuthUser';
+        const AUTH_TOKEN_STORAGE_KEY = 'podcastStudioAuthToken';
+
+        function getLoggedInUser() {
             try {
-                const res = await fetch('/api/sessions');
+                const raw = localStorage.getItem(AUTH_USER_STORAGE_KEY);
+                return raw ? JSON.parse(raw) : null;
+            } catch (err) {
+                return null;
+            }
+        }
+
+        function getStoredToken() {
+            const token = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+            return token && token.trim() ? token.trim() : null;
+        }
+
+        function setStoredAuth(user, token) {
+            localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));
+            localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+        }
+
+        function authHeaders() {
+            const token = getStoredToken();
+            return token ? { Authorization: `Bearer ${token}` } : {};
+        }
+
+        function clearLoginAndRedirect() {
+            localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+            localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+            localStorage.removeItem('myName');
+            localStorage.removeItem('myRole');
+            window.location.href = '/?login=1';
+        }
+
+        async function ensureLoggedIn() {
+            try {
+                const res = await fetch('/api/auth/me', { headers: authHeaders() });
+                if (!res.ok) {
+                    clearLoginAndRedirect();
+                    return null;
+                }
+
+                const data = await res.json();
+                if (!data?.user || !data?.accessToken) {
+                    clearLoginAndRedirect();
+                    return null;
+                }
+
+                setStoredAuth(data.user, data.accessToken);
+                document.getElementById('user-pill').textContent = `USER: ${data.user.name}`;
+                return data.user;
+            } catch (err) {
+                clearLoginAndRedirect();
+                return null;
+            }
+        }
+
+        async function loadSessions() {
+            const user = await ensureLoggedIn();
+            if (!user) return;
+
+            try {
+                const res = await fetch('/api/sessions', { headers: authHeaders() });
+                if (res.status === 401) {
+                    alert('Please login to access your recordings.');
+                    clearLoginAndRedirect();
+                    return;
+                }
+                if (!res.ok) {
+                    throw new Error('Failed to load sessions');
+                }
+
                 const sessions = await res.json();
 
                 document.getElementById('main-loader').style.display = 'none';
@@ -510,6 +600,9 @@
         }
 
         async function loadRecordings(id) {
+            const user = await ensureLoggedIn();
+            if (!user) return;
+
             const listEl = document.getElementById(`recs-${id}`);
             const loaderEl = document.getElementById(`loader-${id}`);
 
@@ -517,7 +610,16 @@
             loaderEl.style.display = 'block';
 
             try {
-                const res = await fetch(`/api/sessions/${id}/recordings`);
+                const res = await fetch(`/api/sessions/${id}/recordings`, { headers: authHeaders() });
+                if (res.status === 401) {
+                    alert('Please login to access your recordings.');
+                    clearLoginAndRedirect();
+                    return;
+                }
+                if (!res.ok) {
+                    throw new Error('Failed to load recordings');
+                }
+
                 const recordings = await res.json();
 
                 loaderEl.style.display = 'none';

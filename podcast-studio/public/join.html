@@ -946,9 +946,13 @@
   </div>
 
   <script>
+    const AUTH_USER_STORAGE_KEY = 'podcastStudioAuthUser';
+    const AUTH_TOKEN_STORAGE_KEY = 'podcastStudioAuthToken';
     const sessionId = window.location.pathname.split('/').pop();
     const urlParams = new URLSearchParams(window.location.search);
     let myName = urlParams.get('name') || localStorage.getItem('myName') || '';
+    let authToken = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || '';
+    let authUserId = '';
     let socket;
     let myStream = null;
     let setupMicOn = true, setupCamOn = true;
@@ -960,6 +964,47 @@
     let recordingChunks = {};
     let peerRecorders = {};
     let mySocketId = null;
+
+    function getAuthHeaders() {
+      return authToken ? { Authorization: `Bearer ${authToken}` } : {};
+    }
+
+    function redirectToLogin() {
+      localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+      localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+      localStorage.removeItem('myName');
+      localStorage.removeItem('myRole');
+      window.location.href = '/?login=1';
+    }
+
+    async function ensureAuthenticated() {
+      try {
+        const res = await fetch('/api/auth/me', { headers: getAuthHeaders() });
+        if (!res.ok) {
+          redirectToLogin();
+          return false;
+        }
+
+        const data = await res.json();
+        if (!data?.user || !data?.accessToken) {
+          redirectToLogin();
+          return false;
+        }
+
+        authToken = data.accessToken;
+        authUserId = data.user.id;
+        myName = data.user.name;
+
+        localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(data.user));
+        localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, authToken);
+        localStorage.setItem('myName', myName);
+        localStorage.setItem('myRole', 'guest');
+        return true;
+      } catch (err) {
+        redirectToLogin();
+        return false;
+      }
+    }
 
     const ICE = {
       iceServers: [
@@ -1048,6 +1093,7 @@
         return;
       }
       localStorage.setItem('myName', myName);
+      localStorage.setItem('myRole', 'guest');
       document.getElementById('guest-name-display').textContent = myName;
 
       showScreen('waiting');
@@ -1055,12 +1101,16 @@
     }
 
     function initSocket() {
-      socket = io();
+      socket = io({ auth: { token: authToken } });
       mySocketId = null;
 
       socket.on('connect', () => {
         mySocketId = socket.id;
-        socket.emit('guest:join', { sessionId, name: myName });
+        socket.emit('guest:join', { sessionId });
+      });
+
+      socket.on('connect_error', () => {
+        redirectToLogin();
       });
 
       socket.on('guest:waiting', ({ participantId }) => {
@@ -1345,8 +1395,12 @@
           // Upload to server only - guests don't download it directly
           const fd = new FormData();
           fd.append('recording', blob); fd.append('sessionId', sessionId);
-          fd.append('participantId', mySocketId || 'guest'); fd.append('participantName', name); fd.append('type', 'individual');
-          fetch('/api/recordings/upload', { method: 'POST', body: fd }).catch(() => { });
+          fd.append('participantId', authUserId || mySocketId || 'guest'); fd.append('participantName', name); fd.append('type', 'individual');
+          fetch('/api/recordings/upload', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: fd
+          }).catch(() => { });
         }
       }
       peerRecorders = {}; recordingChunks = {};
@@ -1414,6 +1468,11 @@
     function showScreen(id) {
       document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
       document.getElementById(`screen-${id}`).classList.add('active');
+
+      const topNav = document.querySelector('body > nav');
+      if (topNav) {
+        topNav.style.display = id === 'studio' ? 'none' : 'flex';
+      }
     }
 
     function showError(msg) {
@@ -1423,7 +1482,14 @@
     }
 
     // Start
-    initDevices();
+    (async () => {
+      const ok = await ensureAuthenticated();
+      if (!ok) return;
+
+      document.getElementById('guest-name-input').value = myName;
+      document.getElementById('guest-name-input').readOnly = true;
+      initDevices();
+    })();
   </script>
 </body>
 

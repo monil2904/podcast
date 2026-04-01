@@ -8,6 +8,12 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap"
     rel="stylesheet" />
+  <script>
+    if (!localStorage.getItem('token')) {
+      const code = window.location.pathname.split('/').pop();
+      window.location.href = '/?join=' + code;
+    }
+  </script>
   <script src="/socket.io/socket.io.js"></script>
   <style>
     *,

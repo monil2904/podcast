@@ -827,6 +827,10 @@
       <div class="ctrl" id="ctrl-cam" onclick="toggleCam()" title="Camera On/Off">📷</div>
       <div class="ctrl-label">Camera</div>
     </div>
+    <div class="ctrl-wrap" id="wrap-combined-rec" style="display:none">
+      <div class="ctrl off" id="ctrl-combined" onclick="toggleCombinedRec()" title="Record Combined Screen Layout">💻</div>
+      <div class="ctrl-label" id="lbl-combined">Scrn: OFF</div>
+    </div>
     <div class="ctrl-wrap">
       <div class="ctrl-rec" id="ctrl-rec" onclick="toggleRecording()" title="Start/Stop Recording">⏺</div>
       <div class="ctrl-label" id="rec-label">Start Rec</div>
@@ -859,6 +863,8 @@
     let timerInterval = null, timerSeconds = 0;
     let recordingChunks = {};
     let participantNames = {}; // socketId -> name
+    let recordCombinedLayout = false;
+    const myRole = localStorage.getItem('myRole') || 'guest';
 
     const ICE_CONFIG = {
       iceServers: [
@@ -899,6 +905,17 @@
         console.error(e);
         initSocket();
       }
+      if (myRole === 'host') {
+        const wrapStr = document.getElementById('wrap-combined-rec');
+        if(wrapStr) wrapStr.style.display = 'flex';
+      }
+    }
+
+    function toggleCombinedRec() {
+      recordCombinedLayout = !recordCombinedLayout;
+      document.getElementById('ctrl-combined').classList.toggle('off', !recordCombinedLayout);
+      document.getElementById('lbl-combined').textContent = 'Scrn: ' + (recordCombinedLayout ? 'ON' : 'OFF');
+      toast('Combined Layout Recording ' + (recordCombinedLayout ? 'ON' : 'OFF'));
     }
 
     // ── SOCKET ─────────────────────────────────────────────────
@@ -1094,7 +1111,7 @@
 
       // Combined session recording
       try {
-        if (confirm("Would you like to record the combined screen layout as well? (Click Cancel to only record individual feeds)")) {
+        if (myRole === 'host' && recordCombinedLayout) {
           displayStream = await navigator.mediaDevices.getDisplayMedia({
             video: { displaySurface: "browser" },
             audio: true
@@ -1107,8 +1124,6 @@
           displayStream.getVideoTracks()[0].onended = () => {
             if (isRecording) toggleRecording();
           };
-        } else {
-          toast("Combined recording skipped.");
         }
       } catch (err) {
         console.warn("Could not capture screen for combined recording:", err);

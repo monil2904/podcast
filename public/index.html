@@ -384,8 +384,8 @@ footer span{color:var(--accent)}
 
     <!-- Login Tab -->
     <div id="panel-login" style="display:none">
-      <h2>Host Login</h2>
-      <p>Log in to your account securely via Supabase.</p>
+      <h2 id="auth-title">Welcome</h2>
+      <p id="auth-subtitle">Log in or sign up securely.</p>
       <div class="form-group">
         <label>Email</label>
         <input type="email" id="login-email" placeholder="you@example.com"/>
@@ -395,8 +395,9 @@ footer span{color:var(--accent)}
         <input type="password" id="login-password" placeholder="••••••••"/>
       </div>
       <div id="login-error" class="error-msg">Invalid login credentials.</div>
+      <div id="login-success" class="error-msg" style="background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:var(--green)"></div>
       <div class="modal-actions">
-        <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-outline" onclick="signupHost()">Sign Up</button>
         <button class="btn btn-primary" onclick="loginHost()">Log In →</button>
       </div>
     </div>
@@ -443,11 +444,20 @@ footer span{color:var(--accent)}
 
 <script>
 let activeTab = 'host';
+let intendedTab = 'host';
 
 function openModal(tab) {
   document.getElementById('modal').classList.add('open');
-  if (tab) switchTab(tab);
+  if (tab && tab !== 'login') intendedTab = tab;
+  
+  const hasToken = localStorage.getItem('token');
+  if (!hasToken) {
+    switchTab('login');
+  } else {
+    switchTab(tab || intendedTab);
+  }
 }
+
 function closeModal() {
   document.getElementById('modal').classList.remove('open');
 }
@@ -456,6 +466,14 @@ document.getElementById('modal').addEventListener('click', e => {
 });
 
 function switchTab(tab) {
+  const hasToken = localStorage.getItem('token');
+  if (!hasToken && tab !== 'login') {
+    intendedTab = tab;
+    tab = 'login';
+  } else if (hasToken && tab === 'login') {
+    tab = intendedTab || 'host';
+  }
+
   activeTab = tab;
   document.getElementById('tab-host').classList.toggle('active', tab === 'host');
   document.getElementById('tab-join').classList.toggle('active', tab === 'join');
@@ -483,9 +501,46 @@ async function loginHost() {
     if (data.token) {
       localStorage.setItem('token', data.token);
       document.getElementById('login-error').style.display = 'none';
-      switchTab('host');
+      switchTab(intendedTab || 'host');
     } else {
       document.getElementById('login-error').textContent = data.error || 'Login failed.';
+      document.getElementById('login-error').style.display = 'block';
+    }
+  } catch(e) {
+    document.getElementById('login-error').textContent = 'Server error.';
+    document.getElementById('login-error').style.display = 'block';
+  }
+}
+
+async function signupHost() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  document.getElementById('login-success').style.display = 'none';
+  if (!email || !password) {
+    document.getElementById('login-error').textContent = 'Please fill in all fields.';
+    document.getElementById('login-error').style.display = 'block';
+    return;
+  }
+  
+  try {
+    const res = await fetch('/api/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+        document.getElementById('login-error').style.display = 'none';
+        switchTab(intendedTab || 'host');
+      } else {
+        document.getElementById('login-error').style.display = 'none';
+        document.getElementById('login-success').textContent = data.message || 'Signup successful!';
+        document.getElementById('login-success').style.display = 'block';
+      }
+    } else {
+      document.getElementById('login-error').textContent = data.error || 'Signup failed.';
       document.getElementById('login-error').style.display = 'block';
     }
   } catch(e) {
@@ -510,7 +565,10 @@ async function createSession() {
   try {
     const res = await fetch('/api/sessions', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
       body: JSON.stringify({ hostName: name, title })
     });
     const data = await res.json();
@@ -542,7 +600,8 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeModal();
   if (e.key === 'Enter' && document.getElementById('modal').classList.contains('open')) {
     if (activeTab === 'host') createSession();
-    else joinSession();
+    else if (activeTab === 'join') joinSession();
+    else if (activeTab === 'login') loginHost();
   }
 });
 
